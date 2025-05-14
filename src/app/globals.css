@@ -119,43 +119,8 @@ body {
 }
 
 /* Custom styles for RoaccuTrack calendar days */
-.rt-scheduled-pending .day-content::after {
-  content: '';
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: hsl(var(--accent) / 0.5); /* Dimmed Teal */
-  margin: 2px auto 0;
-}
 
-.rt-taken .day-content {
-  background-color: hsl(var(--taken-bg)) !important;
-  color: hsl(var(--taken-fg)) !important;
-  border-radius: theme(borderRadius.full);
-  font-weight: bold;
-}
-.rt-taken:hover .day-content {
-  background-color: hsl(var(--taken-bg) / 0.9) !important;
-}
-
-
-.rt-missed .day-content {
-  background-color: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
-  border-radius: theme(borderRadius.full);
-  font-weight: bold;
-}
-.rt-missed:hover .day-content {
-  background-color: hsl(var(--primary) / 0.9) !important;
-}
-
-/* Style for the selected day to ensure visibility */
-.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
-  background-color: hsl(var(--primary) / 0.3) !important; /* Lighter pink for selection */
-  color: hsl(var(--primary-foreground)) !important;
-}
-
+/* Basic layout for content within a day cell button */
 .day-content {
   display: flex;
   flex-direction: column;
@@ -163,8 +128,58 @@ body {
   justify-content: center;
   width: 100%;
   height: 100%;
-  position: relative;
+  position: relative; /* For ::after pseudo-elements */
 }
+
+/* Styles for 'taken' days - applied to the button */
+button.rt-taken {
+  background-color: hsl(var(--taken-bg)) !important;
+  color: hsl(var(--taken-fg)) !important;
+  font-weight: bold !important;
+  border-radius: theme(borderRadius.md) !important; /* Match shadcn button radius */
+}
+button.rt-taken:hover {
+  background-color: hsl(var(--taken-bg) / 0.9) !important; /* Slightly darken on hover */
+  color: hsl(var(--taken-fg)) !important;
+}
+
+/* Styles for 'missed' days - applied to the button */
+button.rt-missed {
+  background-color: hsl(var(--primary)) !important; /* Pink */
+  color: hsl(var(--primary-foreground)) !important;
+  font-weight: bold !important;
+  border-radius: theme(borderRadius.md) !important; /* Match shadcn button radius */
+}
+button.rt-missed:hover {
+  background-color: hsl(var(--primary) / 0.9) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Styles for 'scheduled-pending' days - dot indicator */
+/* The button itself might have .day_today style (accent background) or default */
+.rt-scheduled-pending .day-content::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: hsl(var(--accent)); /* Teal dot */
+  margin: 2px auto 0;
+}
+
+/* If a scheduled-pending day is also today, .day_today (accent bg) is applied to button.
+   Make the dot contrast with the accent background. */
+button.day_today.rt-scheduled-pending .day-content::after {
+  background-color: hsl(var(--accent-foreground)); /* White dot on Teal background */
+}
+
+/* Style for the selected day to ensure visibility */
+/* This is from original code, should be fine. It uses !important. */
+.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+  background-color: hsl(var(--primary) / 0.3) !important; /* Lighter pink for selection */
+  color: hsl(var(--primary-foreground)) !important; 
+}
+
 
 /* Ensure calendar itself has a good background and rounded corners */
 .rdp {
@@ -176,4 +191,3 @@ body {
     --rdp-cell-size: 48px;
   }
 }
-
