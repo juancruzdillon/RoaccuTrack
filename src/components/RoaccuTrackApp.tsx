@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import TreatmentSummary from './TreatmentSummary';
-// import NotificationSettings from './NotificationSettings'; // Removed import
 import type { RoaccuTrackData } from '@/types/roaccutrack';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import { useToast } from "@/hooks/use-toast";
@@ -66,7 +65,6 @@ const RoaccuTrackApp: React.FC = () => {
 
   useEffect(() => {
     setClientTime(new Date());
-    // Service worker registration removed
   }, []);
 
   const today = useMemo(() => {
@@ -270,18 +268,43 @@ const RoaccuTrackApp: React.FC = () => {
   };
 
   const calendarDisabledFunction = useMemo(() => {
-    const currentToday = today; 
+    // `today` and `treatmentStartDate` are captured from the useMemo's scope and dependencies.
     return (date: Date): boolean => {
-      if (!currentToday || !treatmentStartDate) {
-        if (isEditingStartDate || !treatmentStartDate) return false;
-        return true; 
+      // Case 1: Editing start date. All days should be selectable.
+      if (isEditingStartDate) {
+        return false;
+      }
+
+      // Case 2: No treatment has been started yet. All days should be selectable to set the start date.
+      if (!treatmentStartDate) {
+        return false;
       }
       
-      if (isEditingStartDate) return false; 
+      // Case 3: `today` is not yet available for isPillDay logic.
+      // isPillDay returns false if today is null, so !isPillDay would be true, disabling the day.
+      // This is a safe default until client-side `today` is determined.
+      if (!today) {
+          return true; 
+      }
 
-      if (isBeforeDate(date, treatmentStartDate)) return true; 
+      const dateToEvaluate = getStartOfDay(date);
+      // treatmentStartDate is already a Date object (or null) from the outer useMemo.
 
-      return false; 
+      // Case 4: Date is before the treatment start date. These should be disabled.
+      if (isBeforeDate(dateToEvaluate, treatmentStartDate)) {
+        return true;
+      }
+
+      // Case 5: Date is on or after treatment start.
+      // It should be disabled if it's NOT a pill day according to the schedule.
+      // `isPillDay` correctly uses `today`
+      // to determine if the daily or every-other-day rule applies.
+      if (!isPillDay(dateToEvaluate, treatmentStartDate, today)) {
+        return true;
+      }
+
+      // If none of the above conditions to disable are met, the day is enabled.
+      return false;
     };
   }, [treatmentStartDate, today, isEditingStartDate]);
 
@@ -294,11 +317,11 @@ const RoaccuTrackApp: React.FC = () => {
       const dateISO = formatDateISO(date);
       if (isPillDay(date, treatmentStartDate, today)) {
         if (data.doses[dateISO] === 'taken') {
-          // Color handled by rt-taken on button
+          // Color handled by rt-taken on button via modifiers
         } else if (isBeforeDate(date, today) && !isSameDay(date, today)) {
-          // Color handled by rt-missed on button
+          // Color handled by rt-missed on button via modifiers
         } else {
-          className += " rt-scheduled-pending"; 
+          className += " rt-scheduled-pending"; // Dot indicator for scheduled future/today non-taken
         }
       }
     }
@@ -406,7 +429,6 @@ const RoaccuTrackApp: React.FC = () => {
           )}
 
           <TreatmentSummary data={data} />
-          {/* NotificationSettings component removed */}
         </div>
       </div>
     </div>
