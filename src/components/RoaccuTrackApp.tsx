@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -131,7 +130,6 @@ const RoaccuTrackApp: React.FC = () => {
             newDoses[selectedDateISO] = 'taken';
             toastMessage = `Pastilla para el ${formatDateReadable(selectedDate)} marcada como tomada.`;
           } else { 
-            // Check if the selected date is before the treatment start date
             if (isBeforeDate(selectedDate, treatmentStartDate)) {
               toast({
                 title: "Fecha Inválida",
@@ -140,7 +138,6 @@ const RoaccuTrackApp: React.FC = () => {
               });
               return;
             }
-            // Fallback for other invalid pill day scenarios, though current isPillDay is simple
             toast({
                 title: "Acción no permitida",
                 description: `No se puede marcar una pastilla para ${formatDateReadable(selectedDate)} en este momento.`,
@@ -161,33 +158,48 @@ const RoaccuTrackApp: React.FC = () => {
   const modifiers = useMemo(() => {
     const takenDates: Date[] = [];
     const missedDates: Date[] = [];
-    const scheduledPendingDates: Date[] = [];
+    const scheduledPendingDates: Date[] = []; // For dot indicator
 
-    if (!today || !treatmentStartDate) { 
-        return { taken: [], missed: [], scheduledPending: [] };
+    if (!today || !treatmentStartDate) {
+      return { taken: takenDates, missed: missedDates, scheduledPending: scheduledPendingDates };
     }
 
-    const earliestDisplayDate = addDaysToDate(treatmentStartDate, -90);
-    const latestDisplayDate = addDaysToDate(today, 180);
-    
-    let currentDate = earliestDisplayDate;
-    while(isBeforeDate(currentDate, latestDisplayDate) || isSameDay(currentDate, latestDisplayDate)) {
-      if (isPillDay(currentDate, treatmentStartDate)) {
-          const currentDateISO = formatDateISO(currentDate);
-          if (data.doses[currentDateISO] === 'taken') {
-              takenDates.push(parseISO(currentDateISO)); // Ensure date objects are consistent
-          } else if (isBeforeDate(currentDate, today) && !isSameDay(currentDate, today)) {
-              missedDates.push(parseISO(currentDateISO));
-          } else {
-              scheduledPendingDates.push(parseISO(currentDateISO));
+    const loopStartDate = getStartOfDay(treatmentStartDate);
+    // Iterate from treatment start up to a reasonable future point for calendar display (e.g., today + 180 days)
+    const loopEndDate = addDaysToDate(today, 180); 
+
+    let currentDateIter = loopStartDate;
+
+    while (isBeforeDate(currentDateIter, loopEndDate) || isSameDay(currentDateIter, loopEndDate)) {
+      // isPillDay will be true for all days from loopStartDate onwards based on current isPillDay logic
+      if (isPillDay(currentDateIter, treatmentStartDate)) {
+        const currentDateISO = formatDateISO(currentDateIter);
+        const isTaken = data.doses[currentDateISO] === 'taken';
+
+        if (isTaken) {
+          takenDates.push(getStartOfDay(currentDateIter));
+        } else {
+          // Not taken
+          // Check if it's a past or current day for "missed" status
+          if (isBeforeDate(currentDateIter, today) || isSameDay(currentDateIter, today)) {
+            missedDates.push(getStartOfDay(currentDateIter));
           }
+          
+          // Check if it's a current or future day for "scheduled-pending" status (dot)
+          if (isAfterDate(currentDateIter, today) || isSameDay(currentDateIter, today)) {
+            scheduledPendingDates.push(getStartOfDay(currentDateIter));
+          }
+        }
       }
-      currentDate = addDaysToDate(currentDate, 1);
-      if (differenceInDays(currentDate, earliestDisplayDate) > (365 * 2)) {
-          console.warn("Exceeded modifier calculation range");
+      
+      currentDateIter = addDaysToDate(currentDateIter, 1);
+      // Safety break to prevent infinite loops in edge cases
+      if (differenceInDays(currentDateIter, loopStartDate) > (365 + 180 + 30)) { // Approx 1 year treatment + 6 months future + buffer
+          console.warn("Exceeded modifier calculation loop range in RoaccuTrackApp");
           break;
       }
     }
+
     return {
       taken: takenDates,
       missed: missedDates,
@@ -257,28 +269,40 @@ const RoaccuTrackApp: React.FC = () => {
         {isBeforeDate(selectedDate, today) && isScheduledDay && !isTaken && (
             <p className="text-sm text-destructive mt-1">Esta dosis fue omitida.</p>
         )}
+         {isSameDay(selectedDate, today) && isScheduledDay && !isTaken && (
+            <p className="text-sm text-destructive mt-1">Pastilla de hoy pendiente.</p>
+        )}
       </>
     );
   };
 
   const calendarDisabledFunction = useMemo(() => {
     const currentToday = today; 
-    // Disable future dates by default unless editing start date.
-    // If treatment started, only pill days are enabled.
     return (date: Date): boolean => {
-      if (!currentToday) return true;
+      if (!currentToday) return true; // Disable if today is not yet determined
       if (isEditingStartDate) return false; // All dates enabled when editing start date
-
-      // Disable dates after today.
-      if(isAfterDate(date, currentToday)) return true;
       
-      // If treatment has started, disable dates that are not pill days (though current logic makes all days after start pill days)
-      // and also disable dates before treatment start.
-      if (treatmentStartDate) {
-        return isBeforeDate(date, treatmentStartDate) || !isPillDay(date, treatmentStartDate);
+      // Allow selection of dates up to today, or future dates if they are part of an already started treatment.
+      // However, the main interaction is for past/today. Limiting future selection unless needed.
+      // For simplicity, let's stick to the original logic of disabling future dates for marking.
+      // The user can select future dates to see they are scheduled, but not mark them.
+      // This check is for enabling/disabling interaction, not for styling.
+      if (isAfterDate(date, currentToday) && (!treatmentStartDate || isAfterDate(date, addDaysToDate(today, 7)))) {
+        // Disable dates far in the future if no treatment or beyond a small window
+        // return true; // Original was strict, let's allow viewing future scheduled ones.
       }
       
-      return false; // If no treatment start date, all past/today dates are enabled for selection.
+      // If treatment has started, disable dates before treatment start.
+      if (treatmentStartDate) {
+         if(isBeforeDate(date, treatmentStartDate)) return true;
+         // Allow selection of any day on or after treatment start if it's not too far in future.
+         // The actual "markable" action is controlled by handleToggleDose logic.
+         return false;
+      }
+      
+      // If no treatment start date, enable all past/today dates for initiating treatment.
+      // And disable future dates.
+      return isAfterDate(date, currentToday);
     };
   }, [treatmentStartDate, today, isEditingStartDate]);
 
@@ -329,7 +353,7 @@ const RoaccuTrackApp: React.FC = () => {
         <Card className="md:col-span-2 shadow-xl">
           <CardHeader>
             <CardTitle className="text-2xl font-semibold">Calendario de Medicación</CardTitle>
-            <CardDescription>Rastrea tu toma de pastillas. Rosa: Omitida, Verde: Tomada, Punto Turquesa: Programada.</CardDescription>
+            <CardDescription>Rastrea tu toma de pastillas. Verde: Tomada, Rosa: Omitida, Punto Turquesa: Programada/Pendiente hoy.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
             {today ? (
@@ -345,6 +369,9 @@ const RoaccuTrackApp: React.FC = () => {
                 components={{
                   DayContent: CustomDayContent
                 }}
+                initialFocus // Helps with testing environments if needed
+                month={treatmentStartDate || today} // Show month of treatment start or today
+                defaultMonth={treatmentStartDate || today} // Default to relevant month
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-[360px] w-full text-muted-foreground">
@@ -390,4 +417,3 @@ const RoaccuTrackApp: React.FC = () => {
 };
 
 export default RoaccuTrackApp;
-
