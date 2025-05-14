@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { RoaccuTrackData } from '@/types/roaccutrack';
-import { parseISO, differenceInDays, isPillDay, getStartOfDay, addDaysToDate, isBeforeDate, isSameDay, formatDateShort, isTodayDate, isAfterDate } from '@/lib/date-utils';
+import { parseISO, differenceInDays, isPillDay, getStartOfDay, addDaysToDate, isBeforeDate, isSameDay, formatDateShort, isTodayDate, isAfterDate, formatDateISO } from '@/lib/date-utils';
 import { TrendingUp, CalendarCheck2, Percent, Loader2 } from 'lucide-react';
 
 interface TreatmentSummaryProps {
@@ -22,6 +22,129 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     return clientTime ? getStartOfDay(clientTime) : undefined;
   }, [clientTime]);
 
+  const treatmentStartDate = useMemo(() => startDateString ? parseISO(startDateString) : null, [startDateString]);
+
+  const summaryDetails = useMemo(() => {
+    if (!today || !treatmentStartDate) {
+      return {
+        nextDoseDateString: "Calculando...",
+        currentStreak: 0,
+        complianceRate: 0,
+        isLoading: true,
+        totalScheduledDaysPast: 0,
+      };
+    }
+
+    let nextDoseDateObj: Date | null = null;
+    // Start checking from today for the next dose
+    let checkFutureDate = today; 
+    for (let i = 0; i < 365 * 2; i++) { // Check up to 2 years in future
+      const dateToScan = addDaysToDate(checkFutureDate, i);
+      // Pass `today` to isPillDay
+      if (isPillDay(dateToScan, treatmentStartDate, today)) {
+        const dateToScanISO = formatDateISO(dateToScan);
+        // If it's a pill day and not already taken (or it's today and not taken)
+        if (!doses[dateToScanISO]) {
+          nextDoseDateObj = dateToScan;
+          break;
+        }
+        // If it's today, and it IS taken, we still need to find the *next* actual pill day.
+        // So, if it's today and taken, loop continues to find nextDoseDateObj after today.
+        if (isSameDay(dateToScan, today) && doses[dateToScanISO]) {
+           // continue to find next one if today is taken
+        } else if (!doses[dateToScanISO]){ // For any other scheduled day not taken
+            nextDoseDateObj = dateToScan;
+            break;
+        }
+      }
+    }
+    const nextDoseDateString = nextDoseDateObj ? formatDateShort(nextDoseDateObj) : "¡Todo al día!";
+
+
+    let currentStreakValue = 0;
+    if (Object.keys(doses).length > 0) {
+        let lastConsecutiveTakenDay: Date | null = null;
+        
+        // Find the latest day at or before today that was scheduled and taken
+        for (let i = 0; ; i++) {
+            const d = addDaysToDate(today, -i);
+            if (isBeforeDate(d, treatmentStartDate)) break;
+            // Pass `today` to isPillDay
+            if (isPillDay(d, treatmentStartDate, today) && doses[formatDateISO(d)] === 'taken') {
+                lastConsecutiveTakenDay = d;
+                break; 
+            }
+            if (isPillDay(d, treatmentStartDate, today) && !(doses[formatDateISO(d)] === 'taken')) {
+                 // Scheduled but not taken, streak is 0 unless this day is today and its taken
+                 if(isSameDay(d,today) && doses[formatDateISO(d)] === 'taken'){
+                    // Handled by finding lastConsecutiveTakenDay above
+                 } else {
+                    break; // Streak broken before or on this day
+                 }
+            }
+            if (i > 365*2) break; // Safety
+        }
+
+        if (lastConsecutiveTakenDay) {
+            for (let i = 0; ; i++) {
+                const dateToCheck = addDaysToDate(lastConsecutiveTakenDay, -i);
+                if (isBeforeDate(dateToCheck, treatmentStartDate)) break;
+                // Pass `today` to isPillDay
+                if (isPillDay(dateToCheck, treatmentStartDate, today)) {
+                    if (doses[formatDateISO(dateToCheck)] === 'taken') {
+                        currentStreakValue++;
+                    } else {
+                        break; // Streak broken
+                    }
+                }
+                if (i > 365*2) break; // Safety
+            }
+        }
+    }
+
+
+    let complianceRateValue = 0;
+    const daysSinceStart = differenceInDays(today, treatmentStartDate);
+    let totalScheduledDaysPastValue = 0;
+    let totalTakenOnScheduledDays = 0;
+
+    if (daysSinceStart >= 0) {
+      for (let i = 0; i <= daysSinceStart; i++) {
+        const dateToCheck = addDaysToDate(treatmentStartDate, i);
+        // Pass `today` to isPillDay. It will use daily rule for past/today.
+        if (isPillDay(dateToCheck, treatmentStartDate, today)) {
+          // Only count days up to and including today for past scheduled days
+          if (isBeforeDate(dateToCheck, today) || isSameDay(dateToCheck,today)) { 
+              totalScheduledDaysPastValue++;
+              const dateToCheckISO = formatDateISO(dateToCheck);
+              if (doses[dateToCheckISO] === 'taken') {
+                  totalTakenOnScheduledDays++;
+              }
+          }
+        }
+      }
+      if (totalScheduledDaysPastValue > 0) {
+        complianceRateValue = Math.round((totalTakenOnScheduledDays / totalScheduledDaysPastValue) * 100);
+      } else if (totalScheduledDaysPastValue === 0 && Object.keys(doses).length > 0 ) { 
+          // handles case where today is the first day and its taken
+          if(isPillDay(today, treatmentStartDate, today) && doses[formatDateISO(today)] === 'taken') {
+            complianceRateValue = 100;
+            totalScheduledDaysPastValue = 1; 
+          }
+      }
+    }
+    
+    return {
+      nextDoseDateString,
+      currentStreak: currentStreakValue,
+      complianceRate: complianceRateValue,
+      isLoading: false,
+      totalScheduledDaysPast: totalScheduledDaysPastValue,
+    };
+
+  }, [today, treatmentStartDate, doses]);
+
+
   if (!startDateString) {
     return (
       <Card className="shadow-lg">
@@ -36,7 +159,7 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     );
   }
   
-  if (!today) {
+  if (summaryDetails.isLoading) {
     return (
       <Card className="shadow-lg">
         <CardHeader>
@@ -55,96 +178,11 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
       </Card>
     );
   }
-
-  const treatmentStartDate = parseISO(startDateString);
-
-  let nextDoseDate: Date | null = null;
-  let currentDate = isBeforeDate(treatmentStartDate, today) || isSameDay(treatmentStartDate, today) ? today : treatmentStartDate;
-  
-  for (let i = 0; i < 60; i++) { 
-    const checkDate = addDaysToDate(currentDate, i);
-    if (isPillDay(checkDate, treatmentStartDate)) {
-      const checkDateISO = checkDate.toISOString().split('T')[0];
-      if (!doses[checkDateISO] || isTodayDate(checkDate)) {
-        if (isSameDay(checkDate, today) && doses[checkDateISO]) { 
-            continue;
-        }
-        nextDoseDate = checkDate;
-        break;
-      }
-    }
-  }
-
-  let currentStreak = 0;
-  if (Object.keys(doses).length > 0) {
-    let streakDate = today;
-    const doseDays = Object.keys(doses).map(d => parseISO(d)).sort((a,b) => b.getTime() - a.getTime());
-    let lastInteractedScheduledDay: Date | null = null;
-
-    for (let i = 0; i <= differenceInDays(today, treatmentStartDate) ; i++) {
-        const d = addDaysToDate(treatmentStartDate, i);
-        if (isPillDay(d, treatmentStartDate) && (isBeforeDate(d, today) || isSameDay(d, today))) {
-            if (!lastInteractedScheduledDay || isAfterDate(d, lastInteractedScheduledDay) ) {
-                lastInteractedScheduledDay = d;
-            }
-        }
-         if (i > 365*2) break; 
-    }
-    
-    if(lastInteractedScheduledDay) {
-        streakDate = lastInteractedScheduledDay;
-        // Iterate backwards from the last interacted scheduled day (or today if it was interacted)
-        for (let i = 0; ; i++) {
-            const dateToCheck = addDaysToDate(streakDate, -i); // Check every day backwards from streakDate
-            
-            // Stop if before treatment start or not a pill day according to schedule
-            if (isBeforeDate(dateToCheck, treatmentStartDate) || !isPillDay(dateToCheck, treatmentStartDate)) {
-                break;
-            }
-            
-            const dateToCheckISO = dateToCheck.toISOString().split('T')[0];
-            if (doses[dateToCheckISO] === 'taken') {
-                currentStreak++;
-            } else {
-                // If a pill day was encountered that wasn't taken, the streak breaks
-                break; 
-            }
-            if (i > 365*2) break; // Safety break for very long streaks
-        }
-    }
-  }
-
-
-  let complianceRate = 0;
-  const daysSinceStart = differenceInDays(today, treatmentStartDate);
-  let totalScheduledDaysPast = 0;
-  let totalTakenOnScheduledDays = 0;
-
-  if (daysSinceStart >= 0) {
-    for (let i = 0; i <= daysSinceStart; i++) {
-      const dateToCheck = addDaysToDate(treatmentStartDate, i);
-      if (isPillDay(dateToCheck, treatmentStartDate)) {
-        if (isBeforeDate(dateToCheck, today) || isSameDay(dateToCheck,today)) { 
-            totalScheduledDaysPast++;
-            const dateToCheckISO = dateToCheck.toISOString().split('T')[0];
-            if (doses[dateToCheckISO] === 'taken') {
-                totalTakenOnScheduledDays++;
-            }
-        }
-      }
-    }
-    if (totalScheduledDaysPast > 0) {
-      complianceRate = Math.round((totalTakenOnScheduledDays / totalScheduledDaysPast) * 100);
-    } else if (Object.keys(doses).length > 0 && totalScheduledDaysPast === 0 && isPillDay(today, treatmentStartDate) && doses[today.toISOString().split('T')[0]] === 'taken') {
-      complianceRate = 100;
-      totalScheduledDaysPast = 1; 
-    }
-  }
   
   const summaryItems = [
-    { icon: TrendingUp, label: "Racha Actual", value: `${currentStreak} día${currentStreak === 1 ? '' : 's'}` },
-    { icon: CalendarCheck2, label: "Próxima Dosis", value: nextDoseDate ? formatDateShort(nextDoseDate) : "¡Todo al día!" },
-    { icon: Percent, label: "Tasa de Cumplimiento", value: `${totalScheduledDaysPast > 0 ? complianceRate : '-'}%`, progress: complianceRate },
+    { icon: TrendingUp, label: "Racha Actual", value: `${summaryDetails.currentStreak} día${summaryDetails.currentStreak === 1 ? '' : 's'}` },
+    { icon: CalendarCheck2, label: "Próxima Dosis", value: summaryDetails.nextDoseDateString },
+    { icon: Percent, label: "Tasa de Cumplimiento", value: `${summaryDetails.totalScheduledDaysPast > 0 ? summaryDetails.complianceRate : '-'}%`, progress: summaryDetails.complianceRate },
   ];
 
   return (

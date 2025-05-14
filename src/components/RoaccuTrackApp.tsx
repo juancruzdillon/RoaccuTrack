@@ -11,7 +11,7 @@ import type { RoaccuTrackData } from '@/types/roaccutrack';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import { useToast } from "@/hooks/use-toast";
 import {
-  formatDateISO, parseISO, isPillDay, getStartOfDay, isBeforeDate, 
+  formatDateISO, parseISO, isPillDay, isPillDayHistorically, getStartOfDay, isBeforeDate,
   formatDateReadable, isSameDay, isAfterDate, differenceInDays, addDaysToDate
 } from '@/lib/date-utils';
 import { CheckCircle2, XCircle, CalendarPlus, Info, Pill, Edit3, Loader2 } from 'lucide-react';
@@ -30,7 +30,8 @@ const generateInitialRoaccuTrackData = (): RoaccuTrackData => {
 
   let currentDate = treatmentStartDate;
   while (isBeforeDate(currentDate, populateUptoDate) || isSameDay(currentDate, populateUptoDate)) {
-    if (isPillDay(currentDate, treatmentStartDate)) { 
+    // Use isPillDayHistorically for initial population, as it reflects past daily intake.
+    if (isPillDayHistorically(currentDate, treatmentStartDate)) { 
       const currentDateISO = formatDateISO(currentDate);
       if (!isSameDay(currentDate, exceptionDate)) {
         initialDoses[currentDateISO] = 'taken';
@@ -95,7 +96,7 @@ const RoaccuTrackApp: React.FC = () => {
   };
 
   const handleToggleDose = () => {
-    if (!selectedDate) return;
+    if (!selectedDate || !today) return; // Ensure today is available
 
     const selectedDateISO = formatDateISO(selectedDate);
     const newDoses = { ...data.doses };
@@ -127,11 +128,11 @@ const RoaccuTrackApp: React.FC = () => {
           delete newDoses[selectedDateISO];
           toastMessage = `Pastilla para el ${formatDateReadable(selectedDate)} desmarcada.`;
         } else {
-          if (isPillDay(selectedDate, treatmentStartDate)) { 
+          // Pass `today` to isPillDay
+          if (isPillDay(selectedDate, treatmentStartDate, today)) { 
             newDoses[selectedDateISO] = 'taken';
             toastMessage = `Pastilla para el ${formatDateReadable(selectedDate)} marcada como tomada.`;
           } else { 
-            // Check if the selected date is before the treatment start date
             if (isBeforeDate(selectedDate, treatmentStartDate)) {
               toast({
                 title: "Fecha Inválida",
@@ -140,10 +141,9 @@ const RoaccuTrackApp: React.FC = () => {
               });
               return;
             }
-            // Fallback for other invalid pill day scenarios, though current isPillDay is simple
             toast({
                 title: "Acción no permitida",
-                description: `No se puede marcar una pastilla para ${formatDateReadable(selectedDate)} en este momento.`,
+                description: `No se puede marcar una pastilla para ${formatDateReadable(selectedDate)} ya que no es un día de toma programado según la pauta actual.`,
                 variant: "destructive",
             });
             return;
@@ -167,23 +167,24 @@ const RoaccuTrackApp: React.FC = () => {
         return { taken: [], missed: [], scheduledPending: [] };
     }
 
-    const earliestDisplayDate = addDaysToDate(treatmentStartDate, -90);
-    const latestDisplayDate = addDaysToDate(today, 180);
+    const earliestDisplayDate = addDaysToDate(treatmentStartDate, -90); // Show some history
+    const latestDisplayDate = addDaysToDate(today, 180); // Show some future
     
     let currentDate = earliestDisplayDate;
     while(isBeforeDate(currentDate, latestDisplayDate) || isSameDay(currentDate, latestDisplayDate)) {
-      if (isPillDay(currentDate, treatmentStartDate)) {
+      // Pass `today` to isPillDay
+      if (isPillDay(currentDate, treatmentStartDate, today)) {
           const currentDateISO = formatDateISO(currentDate);
           if (data.doses[currentDateISO] === 'taken') {
-              takenDates.push(parseISO(currentDateISO)); // Ensure date objects are consistent
+              takenDates.push(getStartOfDay(parseISO(currentDateISO))); 
           } else if (isBeforeDate(currentDate, today) && !isSameDay(currentDate, today)) {
-              missedDates.push(parseISO(currentDateISO));
-          } else {
-              scheduledPendingDates.push(parseISO(currentDateISO));
+              missedDates.push(getStartOfDay(parseISO(currentDateISO)));
+          } else { // Scheduled for today or future, and not yet taken
+              scheduledPendingDates.push(getStartOfDay(parseISO(currentDateISO)));
           }
       }
       currentDate = addDaysToDate(currentDate, 1);
-      if (differenceInDays(currentDate, earliestDisplayDate) > (365 * 2)) {
+      if (differenceInDays(currentDate, earliestDisplayDate) > (365 * 2)) { // Safety break
           console.warn("Exceeded modifier calculation range");
           break;
       }
@@ -199,6 +200,7 @@ const RoaccuTrackApp: React.FC = () => {
     taken: 'rt-taken',
     missed: 'rt-missed',
     scheduledPending: 'rt-scheduled-pending',
+    today: 'day_today', // Added from previous state, ensure it's used if needed
   };
   
   const getSelectedDayInfo = () => {
@@ -234,7 +236,8 @@ const RoaccuTrackApp: React.FC = () => {
       );
     }
     
-    const isScheduledDay = isPillDay(selectedDate, treatmentStartDate); 
+    // Pass `today` to isPillDay
+    const isScheduledDay = isPillDay(selectedDate, treatmentStartDate, today); 
 
     return (
       <>
@@ -263,29 +266,41 @@ const RoaccuTrackApp: React.FC = () => {
 
   const calendarDisabledFunction = useMemo(() => {
     const currentToday = today; 
-    // Disable future dates by default unless editing start date.
-    // If treatment started, only pill days are enabled.
     return (date: Date): boolean => {
-      if (!currentToday) return true;
-      if (isEditingStartDate) return false; // All dates enabled when editing start date
-
-      // Disable dates after today.
-      if(isAfterDate(date, currentToday)) return true;
-      
-      // If treatment has started, disable dates that are not pill days (though current logic makes all days after start pill days)
-      // and also disable dates before treatment start.
-      if (treatmentStartDate) {
-        return isBeforeDate(date, treatmentStartDate) || !isPillDay(date, treatmentStartDate);
+      if (!currentToday || !treatmentStartDate) {
+        // If today or treatmentStartDate is not set, disable all dates until they are.
+        // However, if editing start date, or no treatment has started, allow selection.
+        if (isEditingStartDate || !treatmentStartDate) return false;
+        return true; 
       }
       
-      return false; // If no treatment start date, all past/today dates are enabled for selection.
+      if (isEditingStartDate) return false; // All dates enabled when editing start date
+
+      // Allow selection of past dates up to treatment start, and today.
+      // For future dates, allow selection only if it's a pill day according to the current schedule.
+      if (isAfterDate(date, currentToday)) {
+        return !isPillDay(date, treatmentStartDate, currentToday); // Enable future pill days
+      }
+      
+      // For past dates (before or on treatmentStartDate)
+      if (isBeforeDate(date, treatmentStartDate)) return true; // Disable before start
+
+      // For dates between treatmentStartDate and today (inclusive)
+      // These were historically daily, so they should be enabled unless explicitly disabled.
+      // The primary way to "disable" them if not taken is through styling (missed).
+      // For the purpose of selection, they should be selectable.
+      // However, if `isPillDay` for past implies it MUST be a pill day, this is fine.
+      // Current `isPillDay` for past/today returns true if date >= treatmentStartDate.
+      return false; // Effectively, enable past scheduled days and today
     };
   }, [treatmentStartDate, today, isEditingStartDate]);
 
 
-  const CustomDayContent: React.FC<DayContentProps> = ({ date }) => {
+  const CustomDayContent: React.FC<DayContentProps> = ({ date, activeModifiers }) => {
+    // activeModifiers will contain things like 'taken', 'missed', 'scheduledPending', 'today'
+    // The button itself will get the class, not this div, so this div is just for the number.
     return (
-      <div className="day-content">
+      <div className="day-content"> 
         <span>{date.getDate()}</span>
       </div>
     );
@@ -338,7 +353,7 @@ const RoaccuTrackApp: React.FC = () => {
                 mode="single"
                 selected={selectedDate}
                 onSelect={handleDaySelect}
-                modifiers={modifiers}
+                modifiers={{ ...modifiers, today: today ? [today] : [] }} // Ensure 'today' is passed if needed for styling
                 modifiersClassNames={modifierClassNames}
                 className="rounded-md"
                 disabled={calendarDisabledFunction}
@@ -390,4 +405,3 @@ const RoaccuTrackApp: React.FC = () => {
 };
 
 export default RoaccuTrackApp;
-

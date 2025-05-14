@@ -26,20 +26,46 @@ export const addDaysToDate = (date: Date, amount: number): Date => dateFnsAddDay
 export const formatDateReadable = (date: Date, formatString: string = "d 'de' MMMM 'de' yyyy"): string => dateFnsFormat(date, formatString, { locale: es });
 export const formatDateShort = (date: Date, formatString: string = "d 'de' MMM"): string => dateFnsFormat(date, formatString, { locale: es });
 
-// Updated isPillDay logic: A pill is scheduled for every other day,
-// starting from the treatment start date (day 0).
-export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean => {
+// Function for historical data generation, assumes daily intake from treatment start.
+export const isPillDayHistorically = (date: Date, treatmentStartDate: Date | null): boolean => {
   if (!treatmentStartDate) return false;
+  const startDate = getStartOfDay(treatmentStartDate);
+  const currentDate = getStartOfDay(date);
+  if (isBeforeDate(currentDate, startDate)) {
+    return false;
+  }
+  return true; // Historically, it was daily
+};
+
+
+// Updated isPillDay logic:
+// - For past dates (before today) and today: daily schedule.
+// - For future dates (after today): every other day, with 'today' as the reference for the new pattern.
+export const isPillDay = (date: Date, treatmentStartDate: Date | null, today: Date | null): boolean => {
+  if (!treatmentStartDate || !today) {
+    // If today is not yet available (e.g., during initial SSR or before client mount),
+    // default to false to avoid incorrect scheduling until client-side hydration.
+    return false;
+  }
 
   const startDate = getStartOfDay(treatmentStartDate);
   const currentDate = getStartOfDay(date);
+  const currentToday = getStartOfDay(today);
 
-  // Pills are only scheduled on or after the start date
+  // Rule 1: Pills are only scheduled on or after the treatment start date.
   if (isBeforeDate(currentDate, startDate)) {
     return false;
   }
 
-  const daysDifference = differenceInDays(currentDate, startDate);
-  // Pills are taken every other day (day 0, day 2, day 4, ...)
-  return daysDifference % 2 === 0;
+  // Rule 2: For any date in the past (before currentToday) or for currentToday itself.
+  // The schedule was/is daily.
+  if (isBeforeDate(currentDate, currentToday) || isSameDay(currentDate, currentToday)) {
+    return true;
+  }
+
+  // Rule 3: For any date in the future (after currentToday).
+  // The schedule is "every other day", with currentToday being the reference for the pattern.
+  // If today is considered day 0 of this new pattern, then future pill days are on even day differences from today.
+  const daysDifferenceFromToday = differenceInDays(currentDate, currentToday);
+  return daysDifferenceFromToday % 2 === 0;
 };
