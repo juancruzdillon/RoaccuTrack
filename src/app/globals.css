@@ -230,7 +230,6 @@ body {
   margin: 1em 0;
 }
 .rdp-button { /* Ensure buttons fill the cell for bg color to show */
-  width: 100%;
   height: 100%;
   border-radius: theme('borderRadius.md') !important; /* default button radius */
 }
