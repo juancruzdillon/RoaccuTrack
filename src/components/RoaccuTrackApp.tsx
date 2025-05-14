@@ -81,10 +81,10 @@ const RoaccuTrackApp: React.FC = () => {
     if (today && !currentDisplayMonth) {
       // Initialize currentDisplayMonth to selectedDate if available, otherwise to today.
       // If treatmentStartDate exists, prefer that for initial month view.
-      const initialMonth = selectedDate || (treatmentStartDate || today);
+      const initialMonth = selectedDate || today;
       setCurrentDisplayMonth(initialMonth);
     }
-  }, [today, selectedDate, currentDisplayMonth, treatmentStartDate]);
+  }, [today, selectedDate, currentDisplayMonth]);
 
 
   useEffect(() => {
@@ -373,7 +373,7 @@ const RoaccuTrackApp: React.FC = () => {
                 components={{
                   DayContent: CustomDayContent
                 }}
- defaultMonth={today} 
+                defaultMonth={new Date()} 
                 fromDate={addDaysToDate(treatmentStartDate, -365)} 
                 toDate={addDaysToDate(today, 365 * 2)} 
               />
