@@ -2,11 +2,9 @@ export interface DoseEntry {
   status: 'taken';
 }
 
-export interface UserData {
-  name: string;
-  age: number | null;
-  treatmentStartDate: string | null; // ISO date string 'YYYY-MM-DD'
-}
+// UserData interface is removed as the form is removed.
+// User-specific info like name and age are now part of RoaccuTrackData,
+// initialized with defaults or from localStorage.
 
 export interface RoaccuTrackData {
   treatmentStartDate: string | null; // ISO date string 'YYYY-MM-DD'
