@@ -1,3 +1,4 @@
+
 import type {Metadata} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import './globals.css';
@@ -16,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'RoaccuTrack',
   description: 'Rastrea tu calendario de tratamiento y adherencia a Roacutan.',
+  manifest: '/manifest.json', // Added manifest link
 };
 
 export default function RootLayout({
@@ -32,3 +34,4 @@ export default function RootLayout({
     </html>
   );
 }
+

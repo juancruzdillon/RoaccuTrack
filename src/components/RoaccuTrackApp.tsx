@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import TreatmentSummary from './TreatmentSummary';
+import NotificationSettings from './NotificationSettings'; // Import NotificationSettings
 import type { RoaccuTrackData } from '@/types/roaccutrack';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import { useToast } from "@/hooks/use-toast";
@@ -63,6 +64,17 @@ const RoaccuTrackApp: React.FC = () => {
   const [clientTime, setClientTime] = useState<Date | undefined>(undefined);
   useEffect(() => {
     setClientTime(new Date());
+
+    // Register service worker
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.workbox !== undefined) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(registration => {
+          console.log('Service Worker registered with scope:', registration.scope);
+        })
+        .catch(error => {
+          console.error('Service Worker registration failed:', error);
+        });
+    }
   }, []);
 
   const today = useMemo(() => {
@@ -200,7 +212,7 @@ const RoaccuTrackApp: React.FC = () => {
     taken: 'rt-taken',
     missed: 'rt-missed',
     scheduledPending: 'rt-scheduled-pending',
-    today: 'day_today', // Added from previous state, ensure it's used if needed
+    today: 'day_today', 
   };
   
   const getSelectedDayInfo = () => {
@@ -236,7 +248,6 @@ const RoaccuTrackApp: React.FC = () => {
       );
     }
     
-    // Pass `today` to isPillDay
     const isScheduledDay = isPillDay(selectedDate, treatmentStartDate, today); 
 
     return (
@@ -268,39 +279,49 @@ const RoaccuTrackApp: React.FC = () => {
     const currentToday = today; 
     return (date: Date): boolean => {
       if (!currentToday || !treatmentStartDate) {
-        // If today or treatmentStartDate is not set, disable all dates until they are.
-        // However, if editing start date, or no treatment has started, allow selection.
         if (isEditingStartDate || !treatmentStartDate) return false;
         return true; 
       }
       
-      if (isEditingStartDate) return false; // All dates enabled when editing start date
+      if (isEditingStartDate) return false; 
 
-      // Allow selection of past dates up to treatment start, and today.
-      // For future dates, allow selection only if it's a pill day according to the current schedule.
       if (isAfterDate(date, currentToday)) {
-        return !isPillDay(date, treatmentStartDate, currentToday); // Enable future pill days
+        return !isPillDay(date, treatmentStartDate, currentToday); 
       }
       
-      // For past dates (before or on treatmentStartDate)
-      if (isBeforeDate(date, treatmentStartDate)) return true; // Disable before start
+      if (isBeforeDate(date, treatmentStartDate)) return true; 
 
-      // For dates between treatmentStartDate and today (inclusive)
-      // These were historically daily, so they should be enabled unless explicitly disabled.
-      // The primary way to "disable" them if not taken is through styling (missed).
-      // For the purpose of selection, they should be selectable.
-      // However, if `isPillDay` for past implies it MUST be a pill day, this is fine.
-      // Current `isPillDay` for past/today returns true if date >= treatmentStartDate.
-      return false; // Effectively, enable past scheduled days and today
+      return false; 
     };
   }, [treatmentStartDate, today, isEditingStartDate]);
 
 
-  const CustomDayContent: React.FC<DayContentProps> = ({ date, activeModifiers }) => {
-    // activeModifiers will contain things like 'taken', 'missed', 'scheduledPending', 'today'
-    // The button itself will get the class, not this div, so this div is just for the number.
+  const CustomDayContent: React.FC<DayContentProps> = ({ date, displayMonth }) => {
+    // Determine if the date is outside the current display month
+    const isOutside = date.getMonth() !== displayMonth.getMonth();
+    let className = "day-content";
+  
+    if (!isOutside && today && treatmentStartDate) {
+      const dateISO = formatDateISO(date);
+      if (isPillDay(date, treatmentStartDate, today)) {
+        if (data.doses[dateISO] === 'taken') {
+          className += " rt-taken";
+        } else if (isBeforeDate(date, today) && !isSameDay(date, today)) {
+          className += " rt-missed";
+        } else {
+          className += " rt-scheduled-pending";
+        }
+      }
+    }
+    if (isSameDay(date, selectedDate || new Date(0))) { // Highlight selected date
+      className += " day_selected_content"; 
+    }
+    if (today && isSameDay(date, today)) {
+      className += " day_today_content";
+    }
+  
     return (
-      <div className="day-content"> 
+      <div className={className}>
         <span>{date.getDate()}</span>
       </div>
     );
@@ -353,13 +374,15 @@ const RoaccuTrackApp: React.FC = () => {
                 mode="single"
                 selected={selectedDate}
                 onSelect={handleDaySelect}
-                modifiers={{ ...modifiers, today: today ? [today] : [] }} // Ensure 'today' is passed if needed for styling
+                modifiers={modifiers} 
                 modifiersClassNames={modifierClassNames}
                 className="rounded-md"
                 disabled={calendarDisabledFunction}
                 components={{
                   DayContent: CustomDayContent
                 }}
+                month={selectedDate || today} // Keep calendar focused on selection or today
+                defaultMonth={today} // Initial month
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-[360px] w-full text-muted-foreground">
@@ -390,7 +413,7 @@ const RoaccuTrackApp: React.FC = () => {
               className="w-full" 
               onClick={() => {
                 setIsEditingStartDate(true); 
-                setSelectedDate(treatmentStartDate); 
+                if (treatmentStartDate) setSelectedDate(treatmentStartDate); 
               }}
             >
               <Edit3 className="mr-2 h-4 w-4" /> Editar Fecha de Inicio del Tratamiento
@@ -398,6 +421,7 @@ const RoaccuTrackApp: React.FC = () => {
           )}
 
           <TreatmentSummary data={data} />
+          <NotificationSettings /> 
         </div>
       </div>
     </div>

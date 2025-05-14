@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -120,7 +121,7 @@ body {
 
 /* Custom styles for RoaccuTrack calendar days */
 
-/* Basic layout for content within a day cell button */
+/* Base styles for DayContent div, will be nested inside the button */
 .day-content {
   display: flex;
   flex-direction: column;
@@ -128,63 +129,100 @@ body {
   justify-content: center;
   width: 100%;
   height: 100%;
-  position: relative; /* For ::after pseudo-elements */
+  border-radius: inherit; /* Inherit border-radius from parent button */
 }
 
-/* Styles for 'taken' days - applied to the button */
-/* Elimina el espacio, era “.rt-taken” hijo de button; ahora aplicas la clase directamente */
+
+/* Apply styles directly to the button based on its modifier class from react-day-picker */
+/* For example, if a day has the 'taken' modifier, its button will get 'rt-taken' class */
+
 @layer components {
-  /* Sin espacio, para que coja la clase directamente en el button */
-  button.rt-taken {
+  /* Styles for 'taken' days */
+  .rt-taken {
     background-color: hsl(var(--taken-bg)) !important;
     color: hsl(var(--taken-fg)) !important;
     font-weight: bold !important;
-    border-radius: theme('borderRadius.md') !important; /* ahora válido dentro de @layer */
-    padding: 1rem;
   }
-}
+  .rt-taken:hover {
+    background-color: hsl(var(--taken-bg) / 0.9) !important;
+  }
 
+  /* Styles for 'missed' days */
+  .rt-missed {
+    background-color: hsl(var(--primary)) !important; /* Pink */
+    color: hsl(var(--primary-foreground)) !important;
+    font-weight: bold !important;
+  }
+  .rt-missed:hover {
+    background-color: hsl(var(--primary) / 0.9) !important;
+  }
+  
+  /* Styles for 'scheduled-pending' days - dot indicator */
+  /* The DayContent div will have the .rt-scheduled-pending class */
+  .day-content.rt-scheduled-pending::after {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: hsl(var(--accent)); /* Teal dot */
+    margin: 2px auto 0; /* Adjust margin as needed */
+  }
 
-button.rt-taken:hover {
-  background-color: hsl(var(--taken-bg) / 0.9) !important; /* Slightly darken on hover */
-  color: hsl(var(--taken-fg)) !important;
-}
+  /* If a scheduled-pending day is also today, its button gets .day_today (accent bg).
+     Make the dot contrast with the accent background.
+     The DayContent div will still have .rt-scheduled-pending.
+  */
+  .day_today .day-content.rt-scheduled-pending::after {
+    background-color: hsl(var(--accent-foreground)); /* White dot on Teal background */
+  }
 
-/* Styles for 'missed' days - applied to the button */
-button.rt-missed {
-  background-color: hsl(var(--primary)) !important; /* Pink */
-  color: hsl(var(--primary-foreground)) !important;
-  font-weight: bold !important;
-  border-radius: theme(borderRadius.md) !important; /* Match shadcn button radius */
-}
-button.rt-missed:hover {
-  background-color: hsl(var(--primary) / 0.9) !important;
-  color: hsl(var(--primary-foreground)) !important;
-}
+  /* Default selected day style from react-day-picker uses primary. */
+  /* This is fine. We ensure our custom styles have higher specificity or use !important if needed. */
+  .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+    background-color: hsl(var(--primary) / 0.3) !important; /* Lighter pink for selection outline */
+    color: hsl(var(--primary-foreground)) !important; 
+    border: 2px solid hsl(var(--primary)) !important;
+  }
+  
+  /* Ensure that if a selected day is also 'taken' or 'missed', its specific color wins */
+  .rdp-day_selected.rt-taken, 
+  .rdp-day_selected.rt-taken:focus-visible, 
+  .rdp-day_selected.rt-taken:hover {
+    background-color: hsl(var(--taken-bg)) !important;
+    color: hsl(var(--taken-fg)) !important;
+  }
 
-/* Styles for 'scheduled-pending' days - dot indicator */
-/* The button itself might have .day_today style (accent background) or default */
-.rt-scheduled-pending .day-content::after {
-  content: '';
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: hsl(var(--accent)); /* Teal dot */
-  margin: 2px auto 0;
-}
+  .rdp-day_selected.rt-missed,
+  .rdp-day_selected.rt-missed:focus-visible,
+  .rdp-day_selected.rt-missed:hover {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
 
-/* If a scheduled-pending day is also today, .day_today (accent bg) is applied to button.
-   Make the dot contrast with the accent background. */
-button.day_today.rt-scheduled-pending .day-content::after {
-  background-color: hsl(var(--accent-foreground)); /* White dot on Teal background */
-}
+  /* Style for day_today when it's not selected but is a special modifier day */
+  .day_today:not(.rdp-day_selected) {
+     background-color: hsl(var(--accent) / 0.7) !important; /* Lighter accent for today */
+     color: hsl(var(--accent-foreground)) !important;
+  }
 
-/* Style for the selected day to ensure visibility */
-/* This is from original code, should be fine. It uses !important. */
-.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
-  background-color: hsl(var(--primary) / 0.3) !important; /* Lighter pink for selection */
-  color: hsl(var(--primary-foreground)) !important; 
+  .day_today.rt-taken:not(.rdp-day_selected) {
+      background-color: hsl(var(--taken-bg)) !important;
+      color: hsl(var(--taken-fg)) !important;
+  }
+   .day_today.rt-missed:not(.rdp-day_selected) {
+      background-color: hsl(var(--primary)) !important;
+      color: hsl(var(--primary-foreground)) !important;
+  }
+
+  /* For the DayContent inside a selected button to ensure text is visible */
+  .day_selected_content span {
+    /* color: hsl(var(--primary-foreground)) !important; */
+  }
+  .day_today_content span {
+     /* color: hsl(var(--accent-foreground)) !important; */
+  }
+
 }
 
 
@@ -193,8 +231,20 @@ button.day_today.rt-scheduled-pending .day-content::after {
   --rdp-cell-size: 40px; /* Adjust cell size as needed */
   margin: 1em 0;
 }
+.rdp-button { /* Ensure buttons fill the cell for bg color to show */
+  width: 100%;
+  height: 100%;
+  border-radius: theme('borderRadius.md') !important; /* default button radius */
+}
+
+
 @media (min-width: 768px) {
   .rdp {
     --rdp-cell-size: 48px;
   }
+}
+
+/* Ensure the span inside DayContent doesn't override text color from parent button */
+.day-content span {
+  color: inherit; 
 }
