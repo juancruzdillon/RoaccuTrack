@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -62,6 +61,8 @@ const RoaccuTrackApp: React.FC = () => {
   const { toast } = useToast();
   
   const [clientTime, setClientTime] = useState<Date | undefined>(undefined);
+  const [currentDisplayMonth, setCurrentDisplayMonth] = useState<Date | undefined>();
+
   useEffect(() => {
     setClientTime(new Date());
 
@@ -81,6 +82,14 @@ const RoaccuTrackApp: React.FC = () => {
     return clientTime ? getStartOfDay(clientTime) : undefined;
   }, [clientTime]);
 
+  useEffect(() => {
+    // Initialize currentDisplayMonth when `today` becomes available,
+    // and currentDisplayMonth hasn't been initialized yet or by user navigation.
+    if (today && !currentDisplayMonth) {
+      setCurrentDisplayMonth(selectedDate || today);
+    }
+  }, [today, selectedDate, currentDisplayMonth]);
+
 
   useEffect(() => {
     if (selectedDate) {
@@ -88,22 +97,33 @@ const RoaccuTrackApp: React.FC = () => {
       if (selectedDate.getTime() !== startOfSelectedDay.getTime()) {
         setSelectedDate(startOfSelectedDay);
       }
+      // Optional: If selectedDate changes to a new month, update currentDisplayMonth
+      // This makes the calendar view follow the selected date's month.
+      // if (currentDisplayMonth && selectedDate.getMonth() !== currentDisplayMonth.getMonth()) {
+      //   setCurrentDisplayMonth(selectedDate);
+      // }
     }
-  }, [selectedDate]);
+  }, [selectedDate, currentDisplayMonth]);
 
   const treatmentStartDate = useMemo(() => data.treatmentStartDate ? parseISO(data.treatmentStartDate) : null, [data.treatmentStartDate]);
 
   const handleDaySelect = (date: Date | undefined) => {
     if (date) {
       const startOfSelected = getStartOfDay(date);
-      if (!selectedDate || selectedDate.getTime() !== startOfSelected.getTime() || isEditingStartDate) {
-         setSelectedDate(startOfSelected);
-      }
-      if (isEditingStartDate && selectedDate?.getTime() === startOfSelected.getTime()){
-        // If editing start date and clicked same day again, do nothing extra here
+      setSelectedDate(startOfSelected); // Always set selectedDate
+
+      if (isEditingStartDate){
+        // If editing start date, clicking a day selects it for setting as start date
       } else {
         setIsEditingStartDate(false); 
       }
+      // If the selected date is in a different month than the currently displayed month,
+      // update the display month to show the selected date's month.
+      if (currentDisplayMonth && startOfSelected.getMonth() !== currentDisplayMonth.getMonth()) {
+        setCurrentDisplayMonth(startOfSelected);
+      }
+    } else {
+      setSelectedDate(undefined);
     }
   };
 
@@ -128,7 +148,7 @@ const RoaccuTrackApp: React.FC = () => {
          newDoses[selectedDateISO] = 'taken';
       }
       setIsEditingStartDate(false);
-      setSelectedDate(undefined); 
+      // setSelectedDate(undefined); // Keep selectedDate to show feedback, or clear if preferred
       toastMessage = `Fecha de inicio del tratamiento establecida para el ${formatDateReadable(selectedDate)}. Pastilla marcada como tomada.`;
     } else {
       if (!treatmentStartDate) { 
@@ -285,9 +305,11 @@ const RoaccuTrackApp: React.FC = () => {
       
       if (isEditingStartDate) return false; 
 
-      if (isAfterDate(date, currentToday)) {
-        return !isPillDay(date, treatmentStartDate, currentToday); 
-      }
+      // Allow future dates that are pill days to be selected for marking
+      // This logic seems to prevent selection of future non-pill days, which is okay.
+      // if (isAfterDate(date, currentToday)) {
+      //   return !isPillDay(date, treatmentStartDate, currentToday); 
+      // }
       
       if (isBeforeDate(date, treatmentStartDate)) return true; 
 
@@ -297,7 +319,6 @@ const RoaccuTrackApp: React.FC = () => {
 
 
   const CustomDayContent: React.FC<DayContentProps> = ({ date, displayMonth }) => {
-    // Determine if the date is outside the current display month
     const isOutside = date.getMonth() !== displayMonth.getMonth();
     let className = "day-content";
   
@@ -305,20 +326,15 @@ const RoaccuTrackApp: React.FC = () => {
       const dateISO = formatDateISO(date);
       if (isPillDay(date, treatmentStartDate, today)) {
         if (data.doses[dateISO] === 'taken') {
-          className += " rt-taken";
+          // This class will be handled by modifiersClassNames on the button itself
         } else if (isBeforeDate(date, today) && !isSameDay(date, today)) {
-          className += " rt-missed";
+          // This class will be handled by modifiersClassNames on the button itself
         } else {
-          className += " rt-scheduled-pending";
+          className += " rt-scheduled-pending"; // Dot indicator for scheduled, not yet taken
         }
       }
     }
-    if (isSameDay(date, selectedDate || new Date(0))) { // Highlight selected date
-      className += " day_selected_content"; 
-    }
-    if (today && isSameDay(date, today)) {
-      className += " day_today_content";
-    }
+    // Selection and today highlights are handled by react-day-picker's default or modifier classes for the button
   
     return (
       <div className={className}>
@@ -368,12 +384,14 @@ const RoaccuTrackApp: React.FC = () => {
             <CardDescription>Rastrea tu toma de pastillas. Rosa: Omitida, Verde: Tomada, Punto Turquesa: Programada.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
-            {today ? (
+            {today && currentDisplayMonth ? (
               <Calendar
                 locale={es}
                 mode="single"
                 selected={selectedDate}
                 onSelect={handleDaySelect}
+                month={currentDisplayMonth}
+                onMonthChange={setCurrentDisplayMonth}
                 modifiers={modifiers} 
                 modifiersClassNames={modifierClassNames}
                 className="rounded-md"
@@ -381,8 +399,6 @@ const RoaccuTrackApp: React.FC = () => {
                 components={{
                   DayContent: CustomDayContent
                 }}
-                month={selectedDate || today} // Keep calendar focused on selection or today
-                defaultMonth={today} // Initial month
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-[360px] w-full text-muted-foreground">
