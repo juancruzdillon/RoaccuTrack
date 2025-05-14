@@ -339,7 +339,7 @@ const RoaccuTrackApp: React.FC = () => {
       <header className="mb-8 text-center">
         <div className="flex items-center justify-center">
           <Pill className="h-12 w-12 text-primary" />
-          <h1 className="text-4xl md:text-5xl font-bold ml-3">Roaccu<span className="text-primary">Track</span></h1>
+          <h1 className="text-4xl md:text-5xl font-bold ml-3">Cuándo<span className="text-primary">Tomo</span></h1>
         </div>
         <p className="text-muted-foreground mt-2 text-lg">Tu compañero personal para el tratamiento con Roacutan.</p>
       </header>
@@ -347,7 +347,7 @@ const RoaccuTrackApp: React.FC = () => {
       {!data.treatmentStartDate && !isEditingStartDate && (
         <Alert className="mb-6 max-w-2xl mx-auto border-primary bg-primary/10">
           <Info className="h-5 w-5 text-primary" />
-          <AlertTitle className="font-semibold text-primary">¡Bienvenido a RoaccuTrack!</AlertTitle>
+          <AlertTitle className="font-semibold text-primary">¡Bienvenido a Cuándo Tomo!</AlertTitle>
           <AlertDescription className="text-primary/80">
             Para comenzar, selecciona en el calendario el día que tomaste tu primer medicamento y márcalo como 'Tomada'.
             Alternativamente, puedes <Button variant="link" className="p-0 h-auto text-primary underline" onClick={() => {setIsEditingStartDate(true); if (today) setSelectedDate(today); else setSelectedDate(getStartOfDay(new Date()))}}>establecer una fecha de inicio pasada</Button>.

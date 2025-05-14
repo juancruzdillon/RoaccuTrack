@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'RoaccuTrack',
+  title: 'Cuándo Tomo',
   description: 'Rastrea tu calendario de tratamiento y adherencia a Roacutan.',
 };
 
