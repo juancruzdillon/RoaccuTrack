@@ -1,3 +1,4 @@
+
 import {
   formatISO as dateFnsFormatISO,
   parseISO as dateFnsParseISO,
@@ -25,8 +26,10 @@ export const addDaysToDate = (date: Date, amount: number): Date => dateFnsAddDay
 export const formatDateReadable = (date: Date, formatString: string = "d 'de' MMMM 'de' yyyy"): string => dateFnsFormat(date, formatString, { locale: es });
 export const formatDateShort = (date: Date, formatString: string = "d 'de' MMM"): string => dateFnsFormat(date, formatString, { locale: es });
 
+// Updated isPillDay logic: A pill is scheduled for every day on or after the treatment start date.
 export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean => {
   if (!treatmentStartDate) return false;
   const daysDifference = differenceInDays(getStartOfDay(date), getStartOfDay(treatmentStartDate));
-  return daysDifference >= 0 && daysDifference % 2 === 0;
+  return daysDifference >= 0; // True if date is on or after treatmentStartDate
 };
+
