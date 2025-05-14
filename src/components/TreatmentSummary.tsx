@@ -1,9 +1,10 @@
-import type React from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { RoaccuTrackData } from '@/types/roaccutrack';
 import { parseISO, differenceInDays, isPillDay, getStartOfDay, addDaysToDate, isBeforeDate, isSameDay, formatDateShort, isTodayDate, isAfterDate } from '@/lib/date-utils';
-import { TrendingUp, CalendarCheck2, Percent } from 'lucide-react';
+import { TrendingUp, CalendarCheck2, Percent, Loader2 } from 'lucide-react';
 
 interface TreatmentSummaryProps {
   data: RoaccuTrackData;
@@ -11,7 +12,15 @@ interface TreatmentSummaryProps {
 
 const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
   const { treatmentStartDate: startDateString, doses } = data;
-  const today = getStartOfDay(new Date());
+
+  const [clientTime, setClientTime] = useState<Date | undefined>(undefined);
+  useEffect(() => {
+    setClientTime(new Date());
+  }, []);
+
+  const today = useMemo(() => {
+    return clientTime ? getStartOfDay(clientTime) : undefined;
+  }, [clientTime]);
 
   if (!startDateString) {
     return (
@@ -26,20 +35,38 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
       </Card>
     );
   }
+  
+  if (!today) {
+    return (
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold flex items-center">
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-6 w-6 text-primary"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            Resumen del Tratamiento
+          </CardTitle>
+          <CardDescription>Tu resumen del tratamiento con Roacutan.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 text-center">
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin text-primary mb-2" />
+            Cargando resumen...
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const treatmentStartDate = parseISO(startDateString);
 
-  // Calculate Next Dose Day
   let nextDoseDate: Date | null = null;
   let currentDate = isBeforeDate(treatmentStartDate, today) || isSameDay(treatmentStartDate, today) ? today : treatmentStartDate;
   
-  for (let i = 0; i < 60; i++) { // Check up to 60 days ahead
+  for (let i = 0; i < 60; i++) { 
     const checkDate = addDaysToDate(currentDate, i);
     if (isPillDay(checkDate, treatmentStartDate)) {
       const checkDateISO = checkDate.toISOString().split('T')[0];
       if (!doses[checkDateISO] || isTodayDate(checkDate)) {
-         // if it's today and not taken OR any future scheduled day
-        if (isSameDay(checkDate, today) && doses[checkDateISO]) { // if today and taken, look for next
+        if (isSameDay(checkDate, today) && doses[checkDateISO]) { 
             continue;
         }
         nextDoseDate = checkDate;
@@ -48,16 +75,12 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     }
   }
 
-
-  // Calculate Current Streak
   let currentStreak = 0;
   if (Object.keys(doses).length > 0) {
     let streakDate = today;
-    // Find the latest day a pill was potentially taken or missed (up to today)
     const doseDays = Object.keys(doses).map(d => parseISO(d)).sort((a,b) => b.getTime() - a.getTime());
     let lastInteractedScheduledDay: Date | null = null;
 
-    // Find the most recent scheduled day up to today
     for (let i = 0; i <= differenceInDays(today, treatmentStartDate) ; i++) {
         const d = addDaysToDate(treatmentStartDate, i);
         if (isPillDay(d, treatmentStartDate) && (isBeforeDate(d, today) || isSameDay(d, today))) {
@@ -65,29 +88,33 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
                 lastInteractedScheduledDay = d;
             }
         }
-         if (i > 365*2) break; // Safety break for very long treatments
+         if (i > 365*2) break; 
     }
     
     if(lastInteractedScheduledDay) {
         streakDate = lastInteractedScheduledDay;
+        // Iterate backwards from the last interacted scheduled day (or today if it was interacted)
         for (let i = 0; ; i++) {
-            const dateToCheck = addDaysToDate(streakDate, -i * 2); // Check every other day backwards
+            const dateToCheck = addDaysToDate(streakDate, -i); // Check every day backwards from streakDate
+            
+            // Stop if before treatment start or not a pill day according to schedule
             if (isBeforeDate(dateToCheck, treatmentStartDate) || !isPillDay(dateToCheck, treatmentStartDate)) {
                 break;
             }
+            
             const dateToCheckISO = dateToCheck.toISOString().split('T')[0];
             if (doses[dateToCheckISO] === 'taken') {
                 currentStreak++;
             } else {
-                break;
+                // If a pill day was encountered that wasn't taken, the streak breaks
+                break; 
             }
-             if (i > 365) break; // Safety break
+            if (i > 365*2) break; // Safety break for very long streaks
         }
     }
   }
 
 
-  // Calculate Compliance Rate
   let complianceRate = 0;
   const daysSinceStart = differenceInDays(today, treatmentStartDate);
   let totalScheduledDaysPast = 0;
@@ -97,7 +124,7 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     for (let i = 0; i <= daysSinceStart; i++) {
       const dateToCheck = addDaysToDate(treatmentStartDate, i);
       if (isPillDay(dateToCheck, treatmentStartDate)) {
-        if (isBeforeDate(dateToCheck, today) || isSameDay(dateToCheck,today)) { // Only count past or today's scheduled days
+        if (isBeforeDate(dateToCheck, today) || isSameDay(dateToCheck,today)) { 
             totalScheduledDaysPast++;
             const dateToCheckISO = dateToCheck.toISOString().split('T')[0];
             if (doses[dateToCheckISO] === 'taken') {
@@ -109,9 +136,8 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     if (totalScheduledDaysPast > 0) {
       complianceRate = Math.round((totalTakenOnScheduledDays / totalScheduledDaysPast) * 100);
     } else if (Object.keys(doses).length > 0 && totalScheduledDaysPast === 0 && isPillDay(today, treatmentStartDate) && doses[today.toISOString().split('T')[0]] === 'taken') {
-      // Special case: treatment started today and pill taken today
       complianceRate = 100;
-      totalScheduledDaysPast = 1; // to avoid NaN display if only today is scheduled
+      totalScheduledDaysPast = 1; 
     }
   }
   
