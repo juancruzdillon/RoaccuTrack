@@ -53,6 +53,10 @@ body {
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* New colors for 'taken' state */
+    --taken-bg: 130 55% 45%; /* Green */
+    --taken-fg: 0 0% 100%;   /* White */
   }
 
   .dark {
@@ -98,6 +102,10 @@ body {
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* New colors for 'taken' state in dark mode */
+    --taken-bg: 130 50% 55%; /* Lighter Green */
+    --taken-fg: 0 0% 100%;   /* White */
   }
 }
 
@@ -122,13 +130,13 @@ body {
 }
 
 .rt-taken .day-content {
-  background-color: hsl(var(--accent)) !important;
-  color: hsl(var(--accent-foreground)) !important;
+  background-color: hsl(var(--taken-bg)) !important;
+  color: hsl(var(--taken-fg)) !important;
   border-radius: theme(borderRadius.full);
   font-weight: bold;
 }
 .rt-taken:hover .day-content {
-  background-color: hsl(var(--accent) / 0.9) !important;
+  background-color: hsl(var(--taken-bg) / 0.9) !important;
 }
 
 
@@ -168,3 +176,4 @@ body {
     --rdp-cell-size: 48px;
   }
 }
+

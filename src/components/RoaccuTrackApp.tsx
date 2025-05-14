@@ -258,32 +258,12 @@ const RoaccuTrackApp: React.FC = () => {
     const currentIsEditingStartDate = isEditingStartDate; // Capture for stable reference
 
     return (date: Date): boolean => {
-      // Check if isAfterDate is available, to prevent runtime errors if there's an issue
+      // Check if date-fns isAfterDate is available, to prevent runtime errors if there's an issue
+      // Note: Using our imported isAfterDate wrapper
       if (typeof isAfterDate !== 'function' || typeof isPillDay !== 'function') {
         console.error("Date utility function not available for calendar disable logic");
         return true; // Disable if functions are missing
       }
-      // A day is disabled if it's in the future AND (we are not editing start date) 
-      // AND ( (treatment hasn't started yet) OR (it's not a pill day according to schedule - this part is effectively always true for future days with new isPillDay) )
-      // Simplified: Disable future days if not editing start date.
-      // With new isPillDay (every day from start), this logic simplifies:
-      // If treatment started, future days are pill days. They should be selectable.
-      // If treatment NOT started, future days are not pill days. They should be disabled unless editing.
-      
-      // Original logic:
-      // disabled={(date) => isAfterDate(date, today) && !isEditingStartDate && (!treatmentStartDate || !isPillDay(date, treatmentStartDate))}
-      // With new isPillDay (true for date >= treatmentStartDate):
-      // If treatmentStartDate is set, and date is a future pill day:
-      // isAfterDate(date, today) = true
-      // !isEditingStartDate = true (assume)
-      // !treatmentStartDate = false
-      // !isPillDay(date, treatmentStartDate) = false (because it IS a pill day)
-      // So, term becomes: true && true && (false || false) => false. So, NOT disabled. This is intended.
-      // If treatmentStartDate is NOT set:
-      // isAfterDate(date, today) = true
-      // !isEditingStartDate = true (assume)
-      // !treatmentStartDate = true
-      // term becomes: true && true && (true || irrelevant) => true. So, disabled. This is intended.
       return isAfterDate(date, currentToday) && !currentIsEditingStartDate && (!currentTreatmentStartDate || !isPillDay(date, currentTreatmentStartDate));
     };
   }, [treatmentStartDate, today, isEditingStartDate]);
@@ -326,7 +306,7 @@ const RoaccuTrackApp: React.FC = () => {
         <Card className="md:col-span-2 shadow-xl">
           <CardHeader>
             <CardTitle className="text-2xl font-semibold">Calendario de Medicación</CardTitle>
-            <CardDescription>Rastrea tu toma de pastillas. Rosa: Omitida, Turquesa: Tomada, Punto: Programada.</CardDescription>
+            <CardDescription>Rastrea tu toma de pastillas. Rosa: Omitida, Verde: Tomada, Punto Turquesa: Programada.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
             <Calendar
