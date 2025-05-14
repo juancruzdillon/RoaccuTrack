@@ -1,36 +1,37 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import TreatmentSummary from './TreatmentSummary';
-import type { RoaccuTrackData } from '@/types/roaccutrack';
+import type { RoaccuTrackData, UserData } from '@/types/roaccutrack';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import { useToast } from "@/hooks/use-toast";
 import {
   formatDateISO, parseISO, isPillDay, isPillDayHistorically, getStartOfDay, isBeforeDate,
-  formatDateReadable, isSameDay, isAfterDate, differenceInDays, addDaysToDate
+  formatDateReadable, isSameDay, differenceInDays, addDaysToDate
 } from '@/lib/date-utils';
-import { CheckCircle2, XCircle, CalendarPlus, Info, Pill, Edit3, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, CalendarPlus, Info, Pill, Edit3, Loader2, UserPlus } from 'lucide-react';
 import { es } from 'date-fns/locale';
 import type { DayContentProps } from 'react-day-picker';
+import UserForm from './UserForm';
 
-// Helper function to generate initial data based on the user's scenario
-const generateInitialRoaccuTrackData = (): RoaccuTrackData => {
-  const startDateISO = "2025-03-28";
+const generateInitialRoaccuTrackData = (userData?: UserData): RoaccuTrackData => {
+  const startDateISO = userData?.treatmentStartDate || "2025-03-28"; // Default if no user data yet
   const initialDoses: Record<string, 'taken'> = {};
   
   const treatmentStartDate = parseISO(startDateISO);
-  const exceptionDate = parseISO("2025-05-11"); // Sunday, May 11, 2025 (missed pill)
+  const exceptionDate = parseISO("2025-05-11"); // Sunday, May 11, 2025 (missed pill example)
 
+  // Populate data only for the daily regimen period for the demo
   const populateUptoDate = parseISO("2025-05-12"); 
 
   let currentDate = treatmentStartDate;
   while (isBeforeDate(currentDate, populateUptoDate) || isSameDay(currentDate, populateUptoDate)) {
-    // Use isPillDayHistorically for initial population, as it reflects past daily intake.
+    // isPillDayHistorically is fine here as it's for dates before the schedule change
     if (isPillDayHistorically(currentDate, treatmentStartDate)) { 
       const currentDateISO = formatDateISO(currentDate);
       if (!isSameDay(currentDate, exceptionDate)) {
@@ -45,23 +46,44 @@ const generateInitialRoaccuTrackData = (): RoaccuTrackData => {
   }
 
   return {
-    treatmentStartDate: startDateISO,
+    treatmentStartDate: userData?.treatmentStartDate || null, // Use null if no explicit start date from user yet
     doses: initialDoses,
+    userName: userData?.name || null,
+    userAge: userData?.age || null,
   };
 };
 
 
 const RoaccuTrackApp: React.FC = () => {
-  const [data, setData] = useLocalStorage<RoaccuTrackData>(
+  const [userData, setUserData] = useLocalStorage<UserData | null>('roaccuTrackUser', null);
+  const [appData, setAppData] = useLocalStorage<RoaccuTrackData>(
     'roaccuTrackData',
-    generateInitialRoaccuTrackData()
+    generateInitialRoaccuTrackData(userData || undefined) // Pass initial userData if available
   );
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isEditingStartDate, setIsEditingStartDate] = useState(false);
   const { toast } = useToast();
   
   const [clientTime, setClientTime] = useState<Date | undefined>(undefined);
   const [currentDisplayMonth, setCurrentDisplayMonth] = useState<Date | undefined>();
+
+  // Effect to initialize appData if userData exists but appData is still default or mismatched
+  useEffect(() => {
+    if (userData && userData.treatmentStartDate && 
+        (appData.treatmentStartDate !== userData.treatmentStartDate || !appData.userName)) {
+      setAppData(prevAppData => ({
+        ...prevAppData, // Keep existing doses if any, or re-evaluate if needed
+        treatmentStartDate: userData.treatmentStartDate,
+        userName: userData.name,
+        userAge: userData.age,
+        // If treatmentStartDate changes, doses might need to be cleared or re-evaluated
+        // For simplicity, we're currently just updating the start date and user info.
+        // A more robust solution might clear doses if start date changes significantly.
+      }));
+    }
+  }, [userData, appData.treatmentStartDate, appData.userName, setAppData]);
+
 
   useEffect(() => {
     setClientTime(new Date());
@@ -87,7 +109,7 @@ const RoaccuTrackApp: React.FC = () => {
     }
   }, [selectedDate]);
 
-  const treatmentStartDate = useMemo(() => data.treatmentStartDate ? parseISO(data.treatmentStartDate) : null, [data.treatmentStartDate]);
+  const treatmentStartDate = useMemo(() => appData.treatmentStartDate ? parseISO(appData.treatmentStartDate) : null, [appData.treatmentStartDate]);
 
   const handleDaySelect = (date: Date | undefined) => {
     if (date) {
@@ -106,8 +128,8 @@ const RoaccuTrackApp: React.FC = () => {
     if (!selectedDate || !today) return; 
 
     const selectedDateISO = formatDateISO(selectedDate);
-    const newDoses = { ...data.doses };
-    let newTreatmentStartDate = data.treatmentStartDate;
+    const newDoses = { ...appData.doses };
+    let newTreatmentStartDate = appData.treatmentStartDate;
     let toastMessage = "";
 
     if (isEditingStartDate) {
@@ -124,17 +146,29 @@ const RoaccuTrackApp: React.FC = () => {
       }
       setIsEditingStartDate(false);
       toastMessage = `Fecha de inicio del tratamiento establecida para el ${formatDateReadable(selectedDate)}. Pastilla marcada como tomada.`;
+      
+      // Update userData as well if editing start date through this flow
+      if (userData) {
+        setUserData({...userData, treatmentStartDate: newTreatmentStartDate});
+      }
+
     } else {
       if (!treatmentStartDate) { 
+        // This case should ideally be handled by UserForm submission now
+        // But as a fallback:
         newTreatmentStartDate = selectedDateISO;
         newDoses[selectedDateISO] = 'taken';
         toastMessage = `¡Tratamiento iniciado el ${formatDateReadable(selectedDate)}! Pastilla marcada como tomada.`;
+         if (userData) {
+           setUserData({...userData, treatmentStartDate: newTreatmentStartDate});
+         }
       } else { 
         if (newDoses[selectedDateISO] === 'taken') {
           delete newDoses[selectedDateISO];
           toastMessage = `Pastilla para el ${formatDateReadable(selectedDate)} desmarcada.`;
         } else {
-          if (isPillDay(selectedDate, treatmentStartDate, today)) { 
+          // Pass only selectedDate and treatmentStartDate to isPillDay
+          if (isPillDay(selectedDate, treatmentStartDate)) { 
             newDoses[selectedDateISO] = 'taken';
             toastMessage = `Pastilla para el ${formatDateReadable(selectedDate)} marcada como tomada.`;
           } else { 
@@ -157,7 +191,7 @@ const RoaccuTrackApp: React.FC = () => {
       }
     }
     
-    setData({ treatmentStartDate: newTreatmentStartDate, doses: newDoses });
+    setAppData(prev => ({ ...prev, treatmentStartDate: newTreatmentStartDate, doses: newDoses }));
     if (toastMessage) {
       toast({ title: "Actualización", description: toastMessage });
     }
@@ -172,23 +206,28 @@ const RoaccuTrackApp: React.FC = () => {
         return { taken: [], missed: [], scheduledPending: [] };
     }
 
-    const earliestDisplayDate = addDaysToDate(treatmentStartDate, -90); 
-    const latestDisplayDate = addDaysToDate(today, 180); 
+    // Define a reasonable range for displaying modifiers around the current view or today
+    // Example: 3 months back from treatment start (or a fixed earlier year) and 6 months forward from today
+    const earliestModifierDate = addDaysToDate(treatmentStartDate, -90); // Or new Date(treatmentStartDate.getFullYear(), 0, 1) for start of year
+    const latestModifierDate = addDaysToDate(today, 180); // Or further if needed
     
-    let currentDate = earliestDisplayDate;
-    while(isBeforeDate(currentDate, latestDisplayDate) || isSameDay(currentDate, latestDisplayDate)) {
-      if (isPillDay(currentDate, treatmentStartDate, today)) {
+    let currentDate = earliestModifierDate;
+
+    while(isBeforeDate(currentDate, latestModifierDate) || isSameDay(currentDate, latestModifierDate)) {
+      // isPillDay now only takes date and treatmentStartDate
+      if (isPillDay(currentDate, treatmentStartDate)) {
           const currentDateISO = formatDateISO(currentDate);
-          if (data.doses[currentDateISO] === 'taken') {
+          if (appData.doses[currentDateISO] === 'taken') {
               takenDates.push(getStartOfDay(parseISO(currentDateISO))); 
-          } else if (isBeforeDate(currentDate, today) && !isSameDay(currentDate, today)) {
+          } else if (isBeforeDate(currentDate, today) && !isSameDay(currentDate, today)) { // Past missed dose
               missedDates.push(getStartOfDay(parseISO(currentDateISO)));
-          } else { 
+          } else { // Scheduled but not taken (today or future)
               scheduledPendingDates.push(getStartOfDay(parseISO(currentDateISO)));
           }
       }
       currentDate = addDaysToDate(currentDate, 1);
-      if (differenceInDays(currentDate, earliestDisplayDate) > (365 * 2)) { 
+      // Safety break, adjust if needed for very long treatments or far view ranges
+      if (differenceInDays(currentDate, earliestModifierDate) > (365 * 3)) { 
           console.warn("Exceeded modifier calculation range");
           break;
       }
@@ -198,12 +237,12 @@ const RoaccuTrackApp: React.FC = () => {
       missed: missedDates,
       scheduledPending: scheduledPendingDates,
     };
-  }, [data.doses, treatmentStartDate, today]);
+  }, [appData.doses, treatmentStartDate, today]);
 
   const modifierClassNames = {
     taken: 'rt-taken',
     missed: 'rt-missed',
-    scheduledPending: 'rt-scheduled-pending',
+    scheduledPending: 'rt-scheduled-pending', // This class is for the dot in CustomDayContent
     today: 'day_today', 
   };
   
@@ -214,7 +253,7 @@ const RoaccuTrackApp: React.FC = () => {
     }
 
     const selectedDateISO = formatDateISO(selectedDate);
-    const isTaken = data.doses[selectedDateISO] === 'taken';
+    const isTaken = appData.doses[selectedDateISO] === 'taken';
     
     if (isEditingStartDate) {
       return (
@@ -229,18 +268,15 @@ const RoaccuTrackApp: React.FC = () => {
     }
 
     if (!treatmentStartDate) {
+       // This state should be covered by the UserForm now.
+       // If somehow reached, guide to UserForm or provide a way to set start date.
       return (
-        <>
-          <p className="font-semibold">Comienza tu tratamiento:</p>
-          <p className="text-sm text-muted-foreground mb-2">{formatDateReadable(selectedDate)}</p>
-          <Button onClick={handleToggleDose} className="w-full bg-primary hover:bg-primary/90">
-            <CalendarPlus className="mr-2 h-4 w-4" /> Iniciar Tratamiento y Marcar Tomada
-          </Button>
-        </>
+         <p className="text-muted-foreground">Por favor, completa tu información de usuario para comenzar.</p>
       );
     }
     
-    const isScheduledDay = isPillDay(selectedDate, treatmentStartDate, today); 
+    // isPillDay now only takes selectedDate and treatmentStartDate
+    const isScheduledDay = isPillDay(selectedDate, treatmentStartDate); 
 
     return (
       <>
@@ -268,42 +304,26 @@ const RoaccuTrackApp: React.FC = () => {
   };
 
   const calendarDisabledFunction = useMemo(() => {
-    // `today` and `treatmentStartDate` are captured from the useMemo's scope and dependencies.
     return (date: Date): boolean => {
-      // Case 1: Editing start date. All days should be selectable.
       if (isEditingStartDate) {
         return false;
       }
-
-      // Case 2: No treatment has been started yet. All days should be selectable to set the start date.
-      if (!treatmentStartDate) {
+      if (!treatmentStartDate) { // No treatment started, all days selectable for setting start date.
         return false;
       }
-      
-      // Case 3: `today` is not yet available for isPillDay logic.
-      // isPillDay returns false if today is null, so !isPillDay would be true, disabling the day.
-      // This is a safe default until client-side `today` is determined.
-      if (!today) {
+      if (!today) { // today not determined yet
           return true; 
       }
 
       const dateToEvaluate = getStartOfDay(date);
-      // treatmentStartDate is already a Date object (or null) from the outer useMemo.
-
-      // Case 4: Date is before the treatment start date. These should be disabled.
+      
       if (isBeforeDate(dateToEvaluate, treatmentStartDate)) {
         return true;
       }
-
-      // Case 5: Date is on or after treatment start.
-      // It should be disabled if it's NOT a pill day according to the schedule.
-      // `isPillDay` correctly uses `today`
-      // to determine if the daily or every-other-day rule applies.
-      if (!isPillDay(dateToEvaluate, treatmentStartDate, today)) {
+      // isPillDay now only takes dateToEvaluate and treatmentStartDate
+      if (!isPillDay(dateToEvaluate, treatmentStartDate)) {
         return true;
       }
-
-      // If none of the above conditions to disable are met, the day is enabled.
       return false;
     };
   }, [treatmentStartDate, today, isEditingStartDate]);
@@ -313,10 +333,12 @@ const RoaccuTrackApp: React.FC = () => {
     const isOutside = date.getMonth() !== displayMonth.getMonth();
     let className = "day-content";
   
+    // Check today and treatmentStartDate before calling isPillDay or accessing appData.doses
     if (!isOutside && today && treatmentStartDate) {
       const dateISO = formatDateISO(date);
-      if (isPillDay(date, treatmentStartDate, today)) {
-        if (data.doses[dateISO] === 'taken') {
+      // isPillDay now only takes date and treatmentStartDate
+      if (isPillDay(date, treatmentStartDate)) {
+        if (appData.doses[dateISO] === 'taken') {
           // Color handled by rt-taken on button via modifiers
         } else if (isBeforeDate(date, today) && !isSameDay(date, today)) {
           // Color handled by rt-missed on button via modifiers
@@ -333,6 +355,52 @@ const RoaccuTrackApp: React.FC = () => {
     );
   };
 
+  const handleUserFormSubmit = useCallback((data: UserData) => {
+    setUserData(data);
+    // When user submits form, generate app data based on this new user data
+    // Reset doses or keep existing ones? For simplicity, let's regenerate with potential default history.
+    // A more complex logic might merge or ask user.
+    const newAppData = generateInitialRoaccuTrackData(data);
+    setAppData(newAppData);
+
+    toast({
+      title: "Información Guardada",
+      description: `¡Hola ${data.name}! Tu información ha sido guardada.`,
+    });
+    if (data.treatmentStartDate) {
+        setSelectedDate(parseISO(data.treatmentStartDate)); // Select the start date
+        setCurrentDisplayMonth(parseISO(data.treatmentStartDate)); // Navigate calendar to start month
+    } else if (today) {
+        setSelectedDate(today);
+        setCurrentDisplayMonth(today);
+    }
+
+  }, [setUserData, setAppData, toast, today]);
+
+
+  if (!userData || !userData.treatmentStartDate) {
+    return (
+      <div className="min-h-screen p-4 md:p-8 flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 via-background to-accent/10">
+         <header className="mb-8 text-center">
+          <div className="flex items-center justify-center">
+            <Pill className="h-12 w-12 text-primary" />
+            <h1 className="text-4xl md:text-5xl font-bold ml-3">Cuándo<span className="text-primary">Tomo</span></h1>
+          </div>
+          <p className="text-muted-foreground mt-2 text-lg">Tu compañero personal para el tratamiento con Roacutan.</p>
+        </header>
+        <Card className="w-full max-w-md shadow-2xl">
+          <CardHeader>
+            <CardTitle className="text-2xl flex items-center"><UserPlus className="mr-2 h-6 w-6 text-primary" /> Completa tu Información</CardTitle>
+            <CardDescription>Necesitamos algunos datos para configurar tu calendario de Roacutan.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <UserForm onSubmit={handleUserFormSubmit} initialData={userData} />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
@@ -341,19 +409,10 @@ const RoaccuTrackApp: React.FC = () => {
           <Pill className="h-12 w-12 text-primary" />
           <h1 className="text-4xl md:text-5xl font-bold ml-3">Cuándo<span className="text-primary">Tomo</span></h1>
         </div>
-        <p className="text-muted-foreground mt-2 text-lg">Tu compañero personal para el tratamiento con Roacutan.</p>
+        <p className="text-muted-foreground mt-2 text-lg">
+            Hola {appData.userName || 'Usuario'}, bienvenido a tu seguimiento de Roacutan.
+        </p>
       </header>
-
-      {!data.treatmentStartDate && !isEditingStartDate && (
-        <Alert className="mb-6 max-w-2xl mx-auto border-primary bg-primary/10">
-          <Info className="h-5 w-5 text-primary" />
-          <AlertTitle className="font-semibold text-primary">¡Bienvenido a Cuándo Tomo!</AlertTitle>
-          <AlertDescription className="text-primary/80">
-            Para comenzar, selecciona en el calendario el día que tomaste tu primer medicamento y márcalo como 'Tomada'.
-            Alternativamente, puedes <Button variant="link" className="p-0 h-auto text-primary underline" onClick={() => {setIsEditingStartDate(true); if (today) setSelectedDate(today); else setSelectedDate(getStartOfDay(new Date()))}}>establecer una fecha de inicio pasada</Button>.
-          </AlertDescription>
-        </Alert>
-      )}
       
       {isEditingStartDate && (
          <Alert className="mb-6 max-w-2xl mx-auto border-accent bg-accent/10">
@@ -374,7 +433,7 @@ const RoaccuTrackApp: React.FC = () => {
             <CardDescription>Rastrea tu toma de pastillas. Rosa: Omitida, Verde: Tomada, Punto Turquesa: Programada.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
-            {today && currentDisplayMonth ? (
+            {today && currentDisplayMonth && treatmentStartDate ? ( // Ensure treatmentStartDate is available
               <Calendar
                 locale={es}
                 mode="single"
@@ -389,13 +448,14 @@ const RoaccuTrackApp: React.FC = () => {
                 components={{
                   DayContent: CustomDayContent
                 }}
-                fromYear={2020}
-                toYear={2030}
+                defaultMonth={treatmentStartDate} // Start calendar at treatment start month
+                fromDate={addDaysToDate(treatmentStartDate, -365)} // Allow navigation approx 1 year back
+                toDate={addDaysToDate(today, 365 * 2)} // Allow navigation approx 2 years forward
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-[360px] w-full text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-                Cargando calendario...
+                {treatmentStartDate ? "Cargando calendario..." : "Configura tu fecha de inicio."}
               </div>
             )}
           </CardContent>
@@ -428,7 +488,7 @@ const RoaccuTrackApp: React.FC = () => {
             </Button>
           )}
 
-          <TreatmentSummary data={data} />
+          <TreatmentSummary data={appData} />
         </div>
       </div>
     </div>
@@ -436,3 +496,4 @@ const RoaccuTrackApp: React.FC = () => {
 };
 
 export default RoaccuTrackApp;
+

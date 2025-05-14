@@ -26,7 +26,11 @@ export const addDaysToDate = (date: Date, amount: number): Date => dateFnsAddDay
 export const formatDateReadable = (date: Date, formatString: string = "d 'de' MMMM 'de' yyyy"): string => dateFnsFormat(date, formatString, { locale: es });
 export const formatDateShort = (date: Date, formatString: string = "d 'de' MMM"): string => dateFnsFormat(date, formatString, { locale: es });
 
+// Date when the schedule changes to every other day
+const INTERCALATED_SCHEDULE_START_DATE_ISO = "2025-05-13";
+
 // Function for historical data generation, assumes daily intake from treatment start.
+// This is used for the initial data seeding which happens before INTERCALATED_SCHEDULE_START_DATE_ISO.
 export const isPillDayHistorically = (date: Date, treatmentStartDate: Date | null): boolean => {
   if (!treatmentStartDate) return false;
   const startDate = getStartOfDay(treatmentStartDate);
@@ -34,38 +38,37 @@ export const isPillDayHistorically = (date: Date, treatmentStartDate: Date | nul
   if (isBeforeDate(currentDate, startDate)) {
     return false;
   }
-  return true; // Historically, it was daily
+  // For the purpose of initial data generation (up to 2025-05-12), schedule was daily.
+  return true;
 };
 
 
 // Updated isPillDay logic:
-// - For past dates (before today) and today: daily schedule.
-// - For future dates (after today): every other day, with 'today' as the reference for the new pattern.
-export const isPillDay = (date: Date, treatmentStartDate: Date | null, today: Date | null): boolean => {
-  if (!treatmentStartDate || !today) {
-    // If today is not yet available (e.g., during initial SSR or before client mount),
-    // default to false to avoid incorrect scheduling until client-side hydration.
+// - Daily schedule from treatmentStartDate up to (but not including) INTERCALATED_SCHEDULE_START_DATE_ISO.
+// - Every other day schedule from INTERCALATED_SCHEDULE_START_DATE_ISO inclusive.
+export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean => {
+  if (!treatmentStartDate) {
     return false;
   }
 
   const startDate = getStartOfDay(treatmentStartDate);
   const currentDate = getStartOfDay(date);
-  const currentToday = getStartOfDay(today);
+  const intercalatedStartDate = getStartOfDay(parseISO(INTERCALATED_SCHEDULE_START_DATE_ISO));
 
   // Rule 1: Pills are only scheduled on or after the treatment start date.
   if (isBeforeDate(currentDate, startDate)) {
     return false;
   }
 
-  // Rule 2: For any date in the past (before currentToday) or for currentToday itself.
-  // The schedule was/is daily.
-  if (isBeforeDate(currentDate, currentToday) || isSameDay(currentDate, currentToday)) {
+  // Rule 2: If the current date is BEFORE the intercalated schedule start date.
+  // The schedule is daily.
+  if (isBeforeDate(currentDate, intercalatedStartDate)) {
     return true;
   }
 
-  // Rule 3: For any date in the future (after currentToday).
-  // The schedule is "every other day", with currentToday being the reference for the pattern.
-  // If today is considered day 0 of this new pattern, then future pill days are on even day differences from today.
-  const daysDifferenceFromToday = differenceInDays(currentDate, currentToday);
-  return daysDifferenceFromToday % 2 === 0;
+  // Rule 3: If the current date is ON or AFTER the intercalated schedule start date.
+  // The schedule is "every other day", with intercalatedStartDate being day 0 of this pattern.
+  const daysDifferenceFromIntercalatedStart = differenceInDays(currentDate, intercalatedStartDate);
+  return daysDifferenceFromIntercalatedStart % 2 === 0;
 };
+

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { RoaccuTrackData } from '@/types/roaccutrack';
-import { parseISO, differenceInDays, isPillDay, getStartOfDay, addDaysToDate, isBeforeDate, isSameDay, formatDateShort, isTodayDate, isAfterDate, formatDateISO } from '@/lib/date-utils';
+import { parseISO, differenceInDays, isPillDay, getStartOfDay, addDaysToDate, isBeforeDate, isSameDay, formatDateShort, formatDateISO } from '@/lib/date-utils';
 import { TrendingUp, CalendarCheck2, Percent, Loader2 } from 'lucide-react';
 
 interface TreatmentSummaryProps {
@@ -36,23 +36,19 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     }
 
     let nextDoseDateObj: Date | null = null;
-    // Start checking from today for the next dose
     let checkFutureDate = today; 
-    for (let i = 0; i < 365 * 2; i++) { // Check up to 2 years in future
+    for (let i = 0; i < 365 * 2; i++) { 
       const dateToScan = addDaysToDate(checkFutureDate, i);
-      // Pass `today` to isPillDay
-      if (isPillDay(dateToScan, treatmentStartDate, today)) {
+      // isPillDay now only takes date and treatmentStartDate
+      if (isPillDay(dateToScan, treatmentStartDate)) {
         const dateToScanISO = formatDateISO(dateToScan);
-        // If it's a pill day and not already taken (or it's today and not taken)
         if (!doses[dateToScanISO]) {
           nextDoseDateObj = dateToScan;
           break;
         }
-        // If it's today, and it IS taken, we still need to find the *next* actual pill day.
-        // So, if it's today and taken, loop continues to find nextDoseDateObj after today.
         if (isSameDay(dateToScan, today) && doses[dateToScanISO]) {
            // continue to find next one if today is taken
-        } else if (!doses[dateToScanISO]){ // For any other scheduled day not taken
+        } else if (!doses[dateToScanISO]){ 
             nextDoseDateObj = dateToScan;
             break;
         }
@@ -62,42 +58,41 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
 
 
     let currentStreakValue = 0;
-    if (Object.keys(doses).length > 0) {
+    if (Object.keys(doses).length > 0 && treatmentStartDate) {
         let lastConsecutiveTakenDay: Date | null = null;
         
-        // Find the latest day at or before today that was scheduled and taken
         for (let i = 0; ; i++) {
             const d = addDaysToDate(today, -i);
             if (isBeforeDate(d, treatmentStartDate)) break;
-            // Pass `today` to isPillDay
-            if (isPillDay(d, treatmentStartDate, today) && doses[formatDateISO(d)] === 'taken') {
+            // isPillDay now only takes date and treatmentStartDate
+            if (isPillDay(d, treatmentStartDate) && doses[formatDateISO(d)] === 'taken') {
                 lastConsecutiveTakenDay = d;
                 break; 
             }
-            if (isPillDay(d, treatmentStartDate, today) && !(doses[formatDateISO(d)] === 'taken')) {
-                 // Scheduled but not taken, streak is 0 unless this day is today and its taken
+            // isPillDay now only takes date and treatmentStartDate
+            if (isPillDay(d, treatmentStartDate) && !(doses[formatDateISO(d)] === 'taken')) {
                  if(isSameDay(d,today) && doses[formatDateISO(d)] === 'taken'){
                     // Handled by finding lastConsecutiveTakenDay above
                  } else {
-                    break; // Streak broken before or on this day
+                    break; 
                  }
             }
-            if (i > 365*2) break; // Safety
+            if (i > 365*2) break; 
         }
 
         if (lastConsecutiveTakenDay) {
             for (let i = 0; ; i++) {
                 const dateToCheck = addDaysToDate(lastConsecutiveTakenDay, -i);
                 if (isBeforeDate(dateToCheck, treatmentStartDate)) break;
-                // Pass `today` to isPillDay
-                if (isPillDay(dateToCheck, treatmentStartDate, today)) {
+                // isPillDay now only takes date and treatmentStartDate
+                if (isPillDay(dateToCheck, treatmentStartDate)) {
                     if (doses[formatDateISO(dateToCheck)] === 'taken') {
                         currentStreakValue++;
                     } else {
-                        break; // Streak broken
+                        break; 
                     }
                 }
-                if (i > 365*2) break; // Safety
+                if (i > 365*2) break; 
             }
         }
     }
@@ -108,12 +103,11 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     let totalScheduledDaysPastValue = 0;
     let totalTakenOnScheduledDays = 0;
 
-    if (daysSinceStart >= 0) {
+    if (daysSinceStart >= 0 && treatmentStartDate) {
       for (let i = 0; i <= daysSinceStart; i++) {
         const dateToCheck = addDaysToDate(treatmentStartDate, i);
-        // Pass `today` to isPillDay. It will use daily rule for past/today.
-        if (isPillDay(dateToCheck, treatmentStartDate, today)) {
-          // Only count days up to and including today for past scheduled days
+        // isPillDay now only takes date and treatmentStartDate
+        if (isPillDay(dateToCheck, treatmentStartDate)) {
           if (isBeforeDate(dateToCheck, today) || isSameDay(dateToCheck,today)) { 
               totalScheduledDaysPastValue++;
               const dateToCheckISO = formatDateISO(dateToCheck);
@@ -126,8 +120,8 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
       if (totalScheduledDaysPastValue > 0) {
         complianceRateValue = Math.round((totalTakenOnScheduledDays / totalScheduledDaysPastValue) * 100);
       } else if (totalScheduledDaysPastValue === 0 && Object.keys(doses).length > 0 ) { 
-          // handles case where today is the first day and its taken
-          if(isPillDay(today, treatmentStartDate, today) && doses[formatDateISO(today)] === 'taken') {
+          // isPillDay now only takes date and treatmentStartDate
+          if(isPillDay(today, treatmentStartDate) && doses[formatDateISO(today)] === 'taken') {
             complianceRateValue = 100;
             totalScheduledDaysPastValue = 1; 
           }
@@ -150,7 +144,7 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Resumen del Tratamiento</CardTitle>
-          <CardDescription>Comienza tu tratamiento para ver tu progreso.</CardDescription>
+          <CardDescription>Completa tu información para ver tu progreso.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">Aún no hay datos.</p>
@@ -204,7 +198,7 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
               </span>
               <span className="font-semibold text-foreground">{item.value}</span>
             </div>
-            {item.progress !== undefined && (
+            {item.progress !== undefined && summaryDetails.totalScheduledDaysPast > 0 && (
               <Progress value={item.progress} aria-label={`${item.label} ${item.value}`} className="h-2 [&>div]:bg-accent" />
             )}
           </div>
@@ -215,3 +209,4 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
 };
 
 export default TreatmentSummary;
+
