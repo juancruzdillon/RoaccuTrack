@@ -8,31 +8,43 @@ body {
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --background: 0 0% 93%; /* Light Gray #EEEEEE */
+    --foreground: 240 10% 3.9%; /* Default Dark Gray for text */
+
+    --card: 0 0% 100%; /* White for cards */
+    --card-foreground: 240 10% 3.9%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 240 10% 3.9%;
+
+    --primary: 340 82% 57%; /* Soft Pink #E91E63 */
+    --primary-foreground: 0 0% 100%; /* White */
+
+    /* For secondary, let's use a slightly darker gray for elements like subdued buttons or backgrounds */
+    --secondary: 0 0% 85%; 
+    --secondary-foreground: 240 10% 3.9%;
+
+    --muted: 0 0% 90%; /* Muted gray for less important elements */
+    --muted-foreground: 240 4% 46.1%;
+
+    --accent: 174 100% 29%; /* Teal #009688 */
+    --accent-foreground: 0 0% 100%; /* White */
+
+    --destructive: 0 84.2% 60.2%; /* Default destructive red */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
+
+    --border: 0 0% 85%; /* Border color */
     --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --ring: 340 82% 57%; /* Use primary for ring focus */
+
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+
+    /* Sidebar variables remain, though not actively used by this app's core page */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -42,31 +54,42 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
+    --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+
+    --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+
+    --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
+
+    --primary: 340 82% 65%; /* Slightly lighter pink for dark mode */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 4% 15%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+
+    --muted: 240 4% 15%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 174 100% 35%; /* Slightly lighter teal for dark mode */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+
+    --border: 240 4% 15%;
+    --input: 240 4% 15%;
+    --ring: 340 82% 65%;
+
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -84,5 +107,64 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Custom styles for RoaccuTrack calendar days */
+.rt-scheduled-pending .day-content::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: hsl(var(--accent) / 0.5); /* Dimmed Teal */
+  margin: 2px auto 0;
+}
+
+.rt-taken .day-content {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+  border-radius: theme(borderRadius.full);
+  font-weight: bold;
+}
+.rt-taken:hover .day-content {
+  background-color: hsl(var(--accent) / 0.9) !important;
+}
+
+
+.rt-missed .day-content {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-radius: theme(borderRadius.full);
+  font-weight: bold;
+}
+.rt-missed:hover .day-content {
+  background-color: hsl(var(--primary) / 0.9) !important;
+}
+
+/* Style for the selected day to ensure visibility */
+.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+  background-color: hsl(var(--primary) / 0.3) !important; /* Lighter pink for selection */
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.day-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* Ensure calendar itself has a good background and rounded corners */
+.rdp {
+  --rdp-cell-size: 40px; /* Adjust cell size as needed */
+  margin: 1em 0;
+}
+@media (min-width: 768px) {
+  .rdp {
+    --rdp-cell-size: 48px;
   }
 }
