@@ -76,7 +76,7 @@ const RoaccuTrackApp: React.FC = () => {
   }, [clientTime]);
 
   const treatmentStartDate = useMemo(() => appData.treatmentStartDate ? parseISO(appData.treatmentStartDate) : null, [appData.treatmentStartDate]);
-
+  
   useEffect(() => {
     if (today && !currentDisplayMonth) {
       // Initialize currentDisplayMonth to selectedDate if available, otherwise to today.
@@ -373,7 +373,7 @@ const RoaccuTrackApp: React.FC = () => {
                 components={{
                   DayContent: CustomDayContent
                 }}
-                defaultMonth={treatmentStartDate} 
+ defaultMonth={today} 
                 fromDate={addDaysToDate(treatmentStartDate, -365)} 
                 toDate={addDaysToDate(today, 365 * 2)} 
               />
