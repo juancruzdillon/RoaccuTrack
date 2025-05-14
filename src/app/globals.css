@@ -111,9 +111,7 @@ body {
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  /* Removed overly broad rule: * { @apply border-border; } */
   body {
     @apply bg-background text-foreground;
   }
