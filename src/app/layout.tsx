@@ -17,7 +17,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'RoaccuTrack',
   description: 'Rastrea tu calendario de tratamiento y adherencia a Roacutan.',
-  manifest: '/manifest.json', // Added manifest link
 };
 
 export default function RootLayout({
