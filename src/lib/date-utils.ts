@@ -10,6 +10,7 @@ import {
   addDays as dateFnsAddDays,
   format as dateFnsFormat,
 } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export const formatDateISO = (date: Date): string => dateFnsFormatISO(date, { representation: 'date' });
 export const parseISO = (dateString: string): Date => dateFnsParseISO(dateString);
@@ -20,8 +21,9 @@ export const isAfterDate = (date: Date, dateToCompare: Date): boolean => dateFns
 export const isTodayDate = (date: Date): boolean => dateFnsIsToday(date);
 export const getStartOfDay = (date: Date): Date => dateFnsStartOfDay(date);
 export const addDaysToDate = (date: Date, amount: number): Date => dateFnsAddDays(date, amount);
-export const formatDateReadable = (date: Date, formatString: string = 'MMMM d, yyyy'): string => dateFnsFormat(date, formatString);
-export const formatDateShort = (date: Date, formatString: string = 'MMM d'): string => dateFnsFormat(date, formatString);
+
+export const formatDateReadable = (date: Date, formatString: string = "d 'de' MMMM 'de' yyyy"): string => dateFnsFormat(date, formatString, { locale: es });
+export const formatDateShort = (date: Date, formatString: string = "d 'de' MMM"): string => dateFnsFormat(date, formatString, { locale: es });
 
 export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean => {
   if (!treatmentStartDate) return false;

@@ -2,7 +2,7 @@ import type React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { RoaccuTrackData } from '@/types/roaccutrack';
-import { parseISO, differenceInDays, isPillDay, getStartOfDay, addDaysToDate, isBeforeDate, isSameDay, formatDateShort, isTodayDate } from '@/lib/date-utils';
+import { parseISO, differenceInDays, isPillDay, getStartOfDay, addDaysToDate, isBeforeDate, isSameDay, formatDateShort, isTodayDate, isAfterDate } from '@/lib/date-utils';
 import { TrendingUp, CalendarCheck2, Percent } from 'lucide-react';
 
 interface TreatmentSummaryProps {
@@ -17,11 +17,11 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
     return (
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-xl font-semibold">Treatment Summary</CardTitle>
-          <CardDescription>Start your treatment to see your progress.</CardDescription>
+          <CardTitle className="text-xl font-semibold">Resumen del Tratamiento</CardTitle>
+          <CardDescription>Comienza tu tratamiento para ver tu progreso.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No data yet.</p>
+          <p className="text-muted-foreground">Aún no hay datos.</p>
         </CardContent>
       </Card>
     );
@@ -65,6 +65,7 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
                 lastInteractedScheduledDay = d;
             }
         }
+         if (i > 365*2) break; // Safety break for very long treatments
     }
     
     if(lastInteractedScheduledDay) {
@@ -115,9 +116,9 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
   }
   
   const summaryItems = [
-    { icon: TrendingUp, label: "Current Streak", value: `${currentStreak} day${currentStreak === 1 ? '' : 's'}` },
-    { icon: CalendarCheck2, label: "Next Dose", value: nextDoseDate ? formatDateShort(nextDoseDate) : "All caught up!" },
-    { icon: Percent, label: "Compliance Rate", value: `${totalScheduledDaysPast > 0 ? complianceRate : '-'}%`, progress: complianceRate },
+    { icon: TrendingUp, label: "Racha Actual", value: `${currentStreak} día${currentStreak === 1 ? '' : 's'}` },
+    { icon: CalendarCheck2, label: "Próxima Dosis", value: nextDoseDate ? formatDateShort(nextDoseDate) : "¡Todo al día!" },
+    { icon: Percent, label: "Tasa de Cumplimiento", value: `${totalScheduledDaysPast > 0 ? complianceRate : '-'}%`, progress: complianceRate },
   ];
 
   return (
@@ -125,9 +126,9 @@ const TreatmentSummary: React.FC<TreatmentSummaryProps> = ({ data }) => {
       <CardHeader>
         <CardTitle className="text-xl font-semibold flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-6 w-6 text-primary"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
-          Treatment Summary
+          Resumen del Tratamiento
         </CardTitle>
-        <CardDescription>Your Roaccutane treatment overview.</CardDescription>
+        <CardDescription>Tu resumen del tratamiento con Roacutan.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {summaryItems.map((item, index) => (
