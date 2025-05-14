@@ -132,12 +132,19 @@ body {
 }
 
 /* Styles for 'taken' days - applied to the button */
-button.rt-taken {
-  background-color: hsl(var(--taken-bg)) !important;
-  color: hsl(var(--taken-fg)) !important;
-  font-weight: bold !important;
-  border-radius: theme(borderRadius.md) !important; /* Match shadcn button radius */
+/* Elimina el espacio, era “.rt-taken” hijo de button; ahora aplicas la clase directamente */
+@layer components {
+  /* Sin espacio, para que coja la clase directamente en el button */
+  button.rt-taken {
+    background-color: hsl(var(--taken-bg)) !important;
+    color: hsl(var(--taken-fg)) !important;
+    font-weight: bold !important;
+    border-radius: theme('borderRadius.md') !important; /* ahora válido dentro de @layer */
+    padding: 1rem;
+  }
 }
+
+
 button.rt-taken:hover {
   background-color: hsl(var(--taken-bg) / 0.9) !important; /* Slightly darken on hover */
   color: hsl(var(--taken-fg)) !important;

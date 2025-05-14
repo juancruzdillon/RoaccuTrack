@@ -26,10 +26,20 @@ export const addDaysToDate = (date: Date, amount: number): Date => dateFnsAddDay
 export const formatDateReadable = (date: Date, formatString: string = "d 'de' MMMM 'de' yyyy"): string => dateFnsFormat(date, formatString, { locale: es });
 export const formatDateShort = (date: Date, formatString: string = "d 'de' MMM"): string => dateFnsFormat(date, formatString, { locale: es });
 
-// Updated isPillDay logic: A pill is scheduled for every day on or after the treatment start date.
+// Updated isPillDay logic: A pill is scheduled for every other day,
+// starting from the treatment start date (day 0).
 export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean => {
   if (!treatmentStartDate) return false;
-  const daysDifference = differenceInDays(getStartOfDay(date), getStartOfDay(treatmentStartDate));
-  return daysDifference >= 0; // True if date is on or after treatmentStartDate
-};
 
+  const startDate = getStartOfDay(treatmentStartDate);
+  const currentDate = getStartOfDay(date);
+
+  // Pills are only scheduled on or after the start date
+  if (isBeforeDate(currentDate, startDate)) {
+    return false;
+  }
+
+  const daysDifference = differenceInDays(currentDate, startDate);
+  // Pills are taken every other day (day 0, day 2, day 4, ...)
+  return daysDifference % 2 === 0;
+};
