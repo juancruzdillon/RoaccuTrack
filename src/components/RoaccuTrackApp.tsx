@@ -335,7 +335,7 @@ const RoaccuTrackApp: React.FC = () => {
           <h1 className="text-4xl md:text-5xl font-bold ml-3">Cuándo<span className="text-primary">Tomo</span></h1>
         </div>
         <p className="text-muted-foreground mt-2 text-lg">
-            Hola {appData.userName || 'Usuario'}, bienvenido a tu seguimiento de Roacutan.
+          Bienvenido a tu seguimiento de Roacutan.
         </p>
       </header>
       
