@@ -10,6 +10,7 @@ import {
   startOfDay as dateFnsStartOfDay,
   addDays as dateFnsAddDays,
   format as dateFnsFormat,
+  getDay as dateFnsGetDay,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -35,17 +36,18 @@ export const isPillDayHistorically = (date: Date, treatmentStartDate: Date | nul
   if (!treatmentStartDate) return false;
   const startDate = getStartOfDay(treatmentStartDate);
   const currentDate = getStartOfDay(date);
+  
   if (isBeforeDate(currentDate, startDate)) {
     return false;
   }
-  // For the purpose of initial data generation (up to 2025-05-12), schedule was daily.
-  return true;
+  
+  const dayOfWeek = dateFnsGetDay(currentDate); // Sunday is 0, Saturday is 6
+  return dayOfWeek !== 0 && dayOfWeek !== 6;
 };
 
 
 // Updated isPillDay logic:
-// - Daily schedule from treatmentStartDate up to (but not including) INTERCALATED_SCHEDULE_START_DATE_ISO.
-// - Every other day schedule from INTERCALATED_SCHEDULE_START_DATE_ISO inclusive.
+// - Daily schedule from Monday to Friday.
 export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean => {
   if (!treatmentStartDate) {
     return false;
@@ -53,22 +55,14 @@ export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean 
 
   const startDate = getStartOfDay(treatmentStartDate);
   const currentDate = getStartOfDay(date);
-  const intercalatedStartDate = getStartOfDay(parseISO(INTERCALATED_SCHEDULE_START_DATE_ISO));
 
-  // Rule 1: Pills are only scheduled on or after the treatment start date.
+  // Pills are only scheduled on or after the treatment start date.
   if (isBeforeDate(currentDate, startDate)) {
     return false;
   }
 
-  // Rule 2: If the current date is BEFORE the intercalated schedule start date.
-  // The schedule is daily.
-  if (isBeforeDate(currentDate, intercalatedStartDate)) {
-    return true;
-  }
-
-  // Rule 3: If the current date is ON or AFTER the intercalated schedule start date.
-  // The schedule is "every other day", with intercalatedStartDate being day 0 of this pattern.
-  const daysDifferenceFromIntercalatedStart = differenceInDays(currentDate, intercalatedStartDate);
-  return daysDifferenceFromIntercalatedStart % 2 === 0;
+  const dayOfWeek = dateFnsGetDay(currentDate); // Sunday is 0, Saturday is 6
+  return dayOfWeek !== 0 && dayOfWeek !== 6;
 };
+
 

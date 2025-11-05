@@ -17,6 +17,7 @@ import {
 import { CheckCircle2, XCircle, CalendarPlus, Pill, Edit3, Loader2 } from 'lucide-react';
 import { es } from 'date-fns/locale';
 import type { DayContentProps } from 'react-day-picker';
+import { getDay as dateFnsGetDay } from 'date-fns';
 
 const generateInitialRoaccuTrackData = (): RoaccuTrackData => {
   const defaultStartDateISO = "2025-03-28";
@@ -26,14 +27,14 @@ const generateInitialRoaccuTrackData = (): RoaccuTrackData => {
   const initialDoses: Record<string, 'taken'> = {};
   
   const treatmentStartDate = parseISO(defaultStartDateISO);
-  const exceptionDate = parseISO("2025-05-11"); // Sunday, May 11, 2025 (missed pill example)
+  const exceptionDate = parseISO("2025-05-11"); // Sunday, May 11, 2025 (missed pill example) - this will now be ignored by isPillDayHistorically
   const populateUptoDate = parseISO("2025-05-12"); 
 
   let currentDate = treatmentStartDate;
   while (isBeforeDate(currentDate, populateUptoDate) || isSameDay(currentDate, populateUptoDate)) {
     if (isPillDayHistorically(currentDate, treatmentStartDate)) { 
       const currentDateISO = formatDateISO(currentDate);
-      if (!isSameDay(currentDate, exceptionDate)) {
+      if (!isSameDay(currentDate, exceptionDate)) { // This check is somewhat redundant now
         initialDoses[currentDateISO] = 'taken';
       }
     }
@@ -127,18 +128,25 @@ const RoaccuTrackApp: React.FC = () => {
           delete newDoses[doseDateISO];
         }
       });
-      if (!newDoses[selectedDateISO]) { 
-         newDoses[selectedDateISO] = 'taken';
+      if (isPillDay(selectedDate, tempStartDate)) {
+        if (!newDoses[selectedDateISO]) { 
+           newDoses[selectedDateISO] = 'taken';
+        }
+        toastMessage = `Fecha de inicio del tratamiento establecida para el ${formatDateReadable(selectedDate)}. Pastilla marcada como tomada.`;
+      } else {
+        toastMessage = `Fecha de inicio del tratamiento establecida para el ${formatDateReadable(selectedDate)}. Este no es un día de toma, por lo que no se marcó ninguna pastilla.`;
       }
       setIsEditingStartDate(false);
-      toastMessage = `Fecha de inicio del tratamiento establecida para el ${formatDateReadable(selectedDate)}. Pastilla marcada como tomada.`;
       
     } else {
       if (!treatmentStartDate) { 
-        // This case is less likely now that generateInitialRoaccuTrackData provides a default start date
         newTreatmentStartDate = selectedDateISO;
-        newDoses[selectedDateISO] = 'taken';
-        toastMessage = `¡Tratamiento iniciado el ${formatDateReadable(selectedDate)}! Pastilla marcada como tomada.`;
+        if(isPillDay(selectedDate, parseISO(selectedDateISO))){
+          newDoses[selectedDateISO] = 'taken';
+          toastMessage = `¡Tratamiento iniciado el ${formatDateReadable(selectedDate)}! Pastilla marcada como tomada.`;
+        } else {
+          toastMessage = `¡Tratamiento iniciado el ${formatDateReadable(selectedDate)}! Este no es un día de toma.`;
+        }
       } else { 
         if (newDoses[selectedDateISO] === 'taken') {
           delete newDoses[selectedDateISO];
@@ -158,7 +166,7 @@ const RoaccuTrackApp: React.FC = () => {
             }
             toast({
                 title: "Acción no permitida",
-                description: `No se puede marcar una pastilla para ${formatDateReadable(selectedDate)} ya que no es un día de toma programado según la pauta actual.`,
+                description: `No se puede marcar una pastilla para ${formatDateReadable(selectedDate)} ya que no es un día de toma programado (solo de Lunes a Viernes).`,
                 variant: "destructive",
             });
             return;
@@ -228,12 +236,14 @@ const RoaccuTrackApp: React.FC = () => {
     const isTaken = appData.doses[selectedDateISO] === 'taken';
     
     if (isEditingStartDate) {
+      const isWeekend = dateFnsGetDay(selectedDate) === 0 || dateFnsGetDay(selectedDate) === 6;
       return (
         <>
           <p className="font-semibold">Establecer nueva fecha de inicio:</p>
           <p className="text-sm text-muted-foreground mb-2">{formatDateReadable(selectedDate)}</p>
+          { isWeekend && <Alert variant="destructive" className="text-xs mb-2"><AlertDescription>Has seleccionado un fin de semana como fecha de inicio. La primera pastilla se programará para el siguiente día laborable.</AlertDescription></Alert>}
           <Button onClick={handleToggleDose} className="w-full bg-primary hover:bg-primary/90">
-            <CalendarPlus className="mr-2 h-4 w-4" /> Establecer como Inicio y Marcar Tomada
+            <CalendarPlus className="mr-2 h-4 w-4" /> Establecer como Inicio
           </Button>
         </>
       );
@@ -264,7 +274,7 @@ const RoaccuTrackApp: React.FC = () => {
         ) : (
            isBeforeDate(selectedDate, treatmentStartDate) ?
             <p className="text-sm text-muted-foreground">Fecha anterior al inicio del tratamiento.</p>
-            : <p className="text-sm text-muted-foreground">No es un día de pastilla programado.</p>
+            : <p className="text-sm text-muted-foreground">No es un día de pastilla (fin de semana).</p>
         )}
         {isBeforeDate(selectedDate, today) && isScheduledDay && !isTaken && (
             <p className="text-sm text-destructive mt-1">Esta dosis fue omitida.</p>
@@ -278,9 +288,6 @@ const RoaccuTrackApp: React.FC = () => {
       if (isEditingStartDate) {
         return false; // All days selectable when editing start date
       }
-      // If no treatment start date, all days are potentially selectable to set it.
-      // However, primary flow for setting initial start date is now via "Edit Start Date" or if it's null.
-      // This function mainly gates interaction once a start date IS set.
       if (!treatmentStartDate) {
         return false; 
       }
@@ -290,11 +297,11 @@ const RoaccuTrackApp: React.FC = () => {
 
       const dateToEvaluate = getStartOfDay(date);
       
-      // Disable dates before treatment start (unless editing start date)
+      // Disable dates before treatment start
       if (isBeforeDate(dateToEvaluate, treatmentStartDate)) {
         return true;
       }
-      // Disable days that are not pill days according to the schedule
+      // Disable days that are not pill days according to the schedule (weekends)
       if (!isPillDay(dateToEvaluate, treatmentStartDate)) {
         return true;
       }
@@ -308,8 +315,8 @@ const RoaccuTrackApp: React.FC = () => {
     let className = "day-content";
   
     if (!isOutside && today && treatmentStartDate) {
-      const dateISO = formatDateISO(date);
       if (isPillDay(date, treatmentStartDate)) {
+        const dateISO = formatDateISO(date);
         if (appData.doses[dateISO] === 'taken') {
           // Color handled by rt-taken on button via modifiers
         } else if (isBeforeDate(date, today) && !isSameDay(date, today)) {
@@ -335,7 +342,7 @@ const RoaccuTrackApp: React.FC = () => {
           <h1 className="text-4xl md:text-5xl font-bold ml-3">Cuándo<span className="text-primary">Tomo</span></h1>
         </div>
         <p className="text-muted-foreground mt-2 text-lg">
-          Bienvenido a tu seguimiento de Roacutan.
+          Bienvenido a tu seguimiento de Roacutan, {appData.userName || "usuario"}.
         </p>
       </header>
       
@@ -344,7 +351,7 @@ const RoaccuTrackApp: React.FC = () => {
           <Edit3 className="h-5 w-5 text-accent" />
           <AlertTitle className="font-semibold text-accent">Editando Fecha de Inicio</AlertTitle>
           <AlertDescription className="text-accent/80">
-            Selecciona un día en el calendario para establecerlo como tu nueva fecha de inicio del tratamiento. Este día también se marcará como tomado.
+            Selecciona un día en el calendario para establecerlo como tu nueva fecha de inicio del tratamiento.
             <Button variant="link" className="p-0 h-auto text-accent underline ml-2" onClick={() => setIsEditingStartDate(false)}>Cancelar</Button>
           </AlertDescription>
         </Alert>
