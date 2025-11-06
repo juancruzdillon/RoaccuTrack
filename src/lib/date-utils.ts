@@ -29,6 +29,7 @@ export const formatDateShort = (date: Date, formatString: string = "d 'de' MMM")
 
 // Date when the schedule changes to every other day
 const INTERCALATED_SCHEDULE_START_DATE_ISO = "2025-05-13";
+const NEW_SCHEDULE_START_DATE_ISO = "2025-11-05";
 
 // Function for historical data generation, assumes daily intake from treatment start.
 // This is used for the initial data seeding which happens before INTERCALATED_SCHEDULE_START_DATE_ISO.
@@ -47,7 +48,8 @@ export const isPillDayHistorically = (date: Date, treatmentStartDate: Date | nul
 
 
 // Updated isPillDay logic:
-// - Daily schedule from Monday to Friday.
+// - Before NEW_SCHEDULE_START_DATE_ISO, it was intercalated.
+// - From NEW_SCHEDULE_START_DATE_ISO onwards, it is Mon-Fri.
 export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean => {
   if (!treatmentStartDate) {
     return false;
@@ -55,14 +57,30 @@ export const isPillDay = (date: Date, treatmentStartDate: Date | null): boolean 
 
   const startDate = getStartOfDay(treatmentStartDate);
   const currentDate = getStartOfDay(date);
+  const newScheduleStartDate = parseISO(NEW_SCHEDULE_START_DATE_ISO);
 
   // Pills are only scheduled on or after the treatment start date.
   if (isBeforeDate(currentDate, startDate)) {
     return false;
   }
 
+  // Logic for dates BEFORE the new schedule starts
+  if (isBeforeDate(currentDate, newScheduleStartDate)) {
+      const intercalatedStartDate = parseISO(INTERCALATED_SCHEDULE_START_DATE_ISO);
+      
+      // Before the intercalated schedule, it was Mon-Fri
+      if (isBeforeDate(currentDate, intercalatedStartDate)) {
+          const dayOfWeek = dateFnsGetDay(currentDate); // Sunday is 0, Saturday is 6
+          return dayOfWeek !== 0 && dayOfWeek !== 6;
+      }
+      
+      // During the intercalated period
+      const daysFromIntercalatedStart = differenceInDays(currentDate, intercalatedStartDate);
+      // Pills on the start day of intercalated schedule, and every 2 days after.
+      return daysFromIntercalatedStart % 2 === 0;
+  }
+
+  // Logic for dates ON or AFTER the new schedule starts
   const dayOfWeek = dateFnsGetDay(currentDate); // Sunday is 0, Saturday is 6
   return dayOfWeek !== 0 && dayOfWeek !== 6;
 };
-
-
